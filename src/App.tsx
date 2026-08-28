@@ -1,0 +1,230 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import Invoices from "./pages/Invoices";
+import NewInvoice from "./pages/NewInvoice";
+import Customers from "./pages/Customers";
+import Suppliers from "./pages/Suppliers";
+import Grades from "./pages/Grades";
+import Godowns from "./pages/Godowns";
+import Products from "./pages/Products";
+import Transactions from "./pages/Transactions";
+import PaymentsIn from "./pages/PaymentsIn";
+import PaymentsOut from "./pages/PaymentsOut";
+import Settings from "./pages/Settings";
+import NotFound from "./pages/NotFound";
+import Purchases from "./pages/Purchases";
+import PurchaseForm from "@/components/purchases/PurchaseForm";
+import Sales from "./pages/Sales";
+import BillToBillPayment from "./pages/BillToBillPayment";
+import CustomerReport from "./pages/reports/CustomerReport";
+import SupplierReport from "./pages/reports/SupplierReport";
+import PaymentInReport from "./pages/reports/PaymentInReport";
+import PaymentOutReport from "./pages/reports/PaymentOutReport";
+import SalesReport from "./pages/reports/SalesReport";
+import PurchaseReport from "./pages/reports/PurchaseReport";
+import { useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { FullPageLoading } from "@/components/ui/loading";
+import SalesForm from "./components/sales/SalesForm";
+import StockReport from "./pages/StockReport";
+
+const queryClient = new QueryClient();
+
+// Protected route component
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!isAuthenticated) {
+        // Only redirect to login if not already on login page
+        if (location.pathname !== '/login') {
+          navigate('/login', { state: { from: location.pathname } });
+        }
+      }
+    }
+  }, [isAuthenticated, loading, navigate, location]);
+
+  if (loading) {
+    return <FullPageLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return <>{children}</>;
+};
+
+// App structure with AuthProvider wrapping BrowserRouter
+const AppContent = () => {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+          {/* Protected routes */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/invoices" element={
+            <ProtectedRoute>
+              <Invoices />
+            </ProtectedRoute>
+          } />
+          <Route path="/invoices/new" element={
+            <ProtectedRoute>
+              <NewInvoice />
+            </ProtectedRoute>
+          } />
+          <Route path="/customers" element={
+            <ProtectedRoute>
+              <Customers />
+            </ProtectedRoute>
+          } />
+          <Route path="/suppliers" element={
+            <ProtectedRoute>
+              <Suppliers />
+            </ProtectedRoute>
+          } />
+          <Route path="/grades" element={
+            <ProtectedRoute>
+              <Grades />
+            </ProtectedRoute>
+          } />
+          <Route path="/godowns" element={
+            <ProtectedRoute>
+              <Godowns />
+            </ProtectedRoute>
+          } />
+          <Route path="/products" element={
+            <ProtectedRoute>
+              <Products />
+            </ProtectedRoute>
+          } />
+          <Route path="/transactions" element={
+            <ProtectedRoute>
+              <Transactions />
+            </ProtectedRoute>
+          } />
+          <Route path="/payments-in" element={
+            <ProtectedRoute>
+              <PaymentsIn />
+            </ProtectedRoute>
+          } />
+          <Route path="/payments-out" element={
+            <ProtectedRoute>
+              <PaymentsOut />
+            </ProtectedRoute>
+          } />
+          <Route path="/purchases" element={
+            <ProtectedRoute>
+              <Purchases />
+            </ProtectedRoute>
+          } />
+          <Route path="/purchases/new" element={
+            <ProtectedRoute>
+              <PurchaseForm />
+            </ProtectedRoute>
+          } />
+          <Route path="/purchases/edit/:id" element={
+            <ProtectedRoute>
+              <PurchaseForm />
+            </ProtectedRoute>
+          } />
+          <Route path="/sales" element={
+            <ProtectedRoute>
+              <Sales />
+            </ProtectedRoute>
+          } />
+          <Route path="/sales/new" element={
+            <ProtectedRoute>
+              <SalesForm />
+            </ProtectedRoute>
+          } />
+          <Route path="/sales/edit/:id" element={
+            <ProtectedRoute>
+              <SalesForm />
+            </ProtectedRoute>
+          } />
+          <Route path="/bill-to-bill" element={
+            <ProtectedRoute>
+              <BillToBillPayment />
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          } />
+
+          {/* Report Routes */}
+          <Route path="/reports/stock" element={
+            <ProtectedRoute>
+              <StockReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/customers" element={
+            <ProtectedRoute>
+              <CustomerReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/suppliers" element={
+            <ProtectedRoute>
+              <SupplierReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/payments-in" element={
+            <ProtectedRoute>
+              <PaymentInReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/payments-out" element={
+            <ProtectedRoute>
+              <PaymentOutReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/sales" element={
+            <ProtectedRoute>
+              <SalesReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/purchases" element={
+            <ProtectedRoute>
+              <PurchaseReport />
+            </ProtectedRoute>
+          } />
+
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+};
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <AppContent />
+    </TooltipProvider>
+  </QueryClientProvider>
+);
+
+export default App;
