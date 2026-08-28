@@ -23,10 +23,17 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
+    const requestUrl = error.config?.url || '';
+    const isAuthRequest = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+
+    // A full page load of /login 404s on Vercel unless SPA rewrites exist.
+    // Skip login/register so a failed sign-in does not bounce the user.
+    if (error.response?.status === 401 && !isAuthRequest) {
       localStorage.removeItem('auth-token');
-      window.location.href = '/login';
+      localStorage.removeItem('user-data');
+      if (window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
     }
     return Promise.reject(error);
   }
