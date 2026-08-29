@@ -11,12 +11,11 @@ import {
 } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Printer, FileText } from "lucide-react";
 import SalesDetails from "./SalesDetails";
 import SalesItems from "./SalesItems";
 import SalesActions from "./SalesActions";
-import pdfService from "@/services/pdfService";
-import html2pdf from "html2pdf.js";
+import { downloadSalePdf } from "@/lib/downloadSalePdf";
 
 interface SalesItem {
   sales_item_id: string;
@@ -24,6 +23,7 @@ interface SalesItem {
   product_id: string;
   product_name: string;
   roll_no: string;
+  shade?: string;
   roll_id: string;
   purchase_item_id?: string;
   meters: number;
@@ -49,8 +49,8 @@ interface SalesFormData {
   godown_no?: string;
   hamaal?: string;
   challan_no?: string;
-  sales_by?: string;
   maker?: string;
+  transport_charges?: number;
   items: SalesItem[];
 }
 
@@ -67,6 +67,7 @@ const SalesForm = () => {
     customer_name: "",
     total_amount: 0,
     maker: "",
+    transport_charges: 0,
     items: [],
   });
 
@@ -120,44 +121,6 @@ const SalesForm = () => {
       setLoading(false);
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       toast.success(`Sale ${id ? "updated" : "created"} successfully`);
-
-      // Download the invoice after successful creation/update
-      try {
-        toast.info("Generating invoice PDF...");
-
-        // Get the HTML from backend
-        const htmlResponse = await salesAPI.getInvoiceHTML(response.data.id);
-        if (!htmlResponse.success || !htmlResponse.data) {
-          throw new Error("Failed to get invoice HTML");
-        }
-
-        // Create a temporary div to hold the HTML
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = htmlResponse.data;
-        document.body.appendChild(tempDiv);
-
-        // Generate PDF
-        const options = {
-          margin: 10,
-          filename: `invoice_${response.data.sales_no}.pdf`,
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2 },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        };
-
-        await html2pdf().set(options).from(tempDiv).save();
-
-        // Clean up
-        document.body.removeChild(tempDiv);
-
-        toast.success("Invoice downloaded successfully");
-      } catch (error) {
-        console.error("Error downloading invoice:", error);
-        toast.error("Failed to download invoice");
-      } finally {
-        setLoading(false);
-      }
-
       navigate("/sales");
     },
     onError: (error) => {
@@ -241,6 +204,7 @@ const SalesForm = () => {
 
             return {
               ...item,
+              shade: item.shade || "",
               total_price: parseFloat((item.meters * item.price).toFixed(2)),
               roll_id: item.roll_id,
               purchase_item_id: item.purchase_item_id || item.roll_id,
@@ -264,8 +228,8 @@ const SalesForm = () => {
             godown_no: response.godown?.id || "",
             hamaal: response.hamaal,
             challan_no: response.challan_no,
-            sales_by: response.sales_by,
             maker: response.maker,
+            transport_charges: response.transport_charges || 0,
             items: itemsWithRolls || [],
           }));
         } catch (error) {
@@ -297,8 +261,12 @@ const SalesForm = () => {
       });
 
       if (hasChanges) {
+        const itemsTotal = updatedItems.reduce(
+          (sum, item) => sum + item.total_price,
+          0
+        );
         const totalAmount = Math.round(
-          updatedItems.reduce((sum, item) => sum + item.total_price, 0)
+          itemsTotal + (formData.transport_charges || 0)
         );
         
         setFormData((prev) => ({
@@ -381,9 +349,13 @@ const SalesForm = () => {
         }
       }
 
-      // Calculate total amount
+      // Calculate total amount including transport charges
+      const itemsTotal = newItems.reduce(
+        (sum, item) => sum + (item.total_price || 0),
+        0
+      );
       const totalAmount = Math.round(
-        newItems.reduce((sum, item) => sum + (item.total_price || 0), 0)
+        itemsTotal + (prevFormData.transport_charges || 0)
       );
       
       return {
@@ -468,9 +440,16 @@ const SalesForm = () => {
         ),
       };
 
+      const itemsTotal = newItems.reduce(
+        (sum, item) => sum + (item.total_price || 0),
+        0
+      );
       setFormData({
         ...formData,
         items: newItems,
+        total_amount: Math.round(
+          itemsTotal + (formData.transport_charges || 0)
+        ),
       });
     }
   };
@@ -486,6 +465,7 @@ const SalesForm = () => {
           product_id: "",
           product_name: "",
           roll_no: "",
+          shade: "",
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
@@ -532,9 +512,14 @@ const SalesForm = () => {
       });
     }
 
+    const itemsTotal = newItems.reduce(
+      (sum, item) => sum + (item.total_price || 0),
+      0
+    );
     setFormData({
       ...formData,
       items: newItems,
+      total_amount: Math.round(itemsTotal + (formData.transport_charges || 0)),
     });
   };
 
@@ -559,6 +544,7 @@ const SalesForm = () => {
           product_id: product.id,
           product_name: product.name,
           roll_no: "",
+          shade: "",
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
@@ -615,6 +601,30 @@ const SalesForm = () => {
     return allRolls.filter((roll) => !selectedRolls.includes(roll.roll_no));
   }, [allRollsPool, formData.items]);
 
+  const handlePrint = async (type: "bill" | "challan") => {
+    if (!id) return;
+    try {
+      toast.info(
+        type === "challan"
+          ? "Generating challan PDF..."
+          : "Generating sales bill PDF..."
+      );
+      await downloadSalePdf(id, formData.sales_no, type);
+      toast.success(
+        type === "challan"
+          ? "Challan downloaded successfully"
+          : "Sales bill downloaded successfully"
+      );
+    } catch (error) {
+      console.error("Error downloading document:", error);
+      toast.error(
+        type === "challan"
+          ? "Failed to download challan"
+          : "Failed to download sales bill"
+      );
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
       <div className="flex justify-between items-center mb-8">
@@ -636,14 +646,38 @@ const SalesForm = () => {
             </Badge>
           )}
         </div>
-        <Button
-          disabled={loading}
-          onClick={handleSubmit}
-          className="bg-brand-teal hover:bg-teal-600"
-        >
-          <Save className="h-4 w-4 mr-2" />
-          {id ? "Update Sale" : "Create Sale"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {id && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() => handlePrint("challan")}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print Challan
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() => handlePrint("bill")}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Print Sales Bill
+              </Button>
+            </>
+          )}
+          <Button
+            disabled={loading}
+            onClick={handleSubmit}
+            className="bg-brand-teal hover:bg-teal-600"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            {id ? "Update Sale" : "Create Sale"}
+          </Button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">

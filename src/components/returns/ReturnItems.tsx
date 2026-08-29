@@ -1,0 +1,215 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Package, Plus, X } from "lucide-react";
+
+interface ReturnItemsProps {
+  mode: "sales" | "purchase";
+  formData: any;
+  products: any[];
+  handleItemChange: (index: number, field: string, value: any) => void;
+  handleProductChange: (index: number, productId: string) => void;
+  addCustomItem?: () => void;
+  removeItem: (index: number) => void;
+}
+
+const ReturnItems = ({
+  mode,
+  formData,
+  products,
+  handleItemChange,
+  handleProductChange,
+  addCustomItem,
+  removeItem,
+}: ReturnItemsProps) => {
+  const isPurchase = mode === "purchase";
+  const hasBill = isPurchase ? formData.purchase_id : formData.sale_id;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <Package className="h-5 w-5 text-brand-teal" />
+          Returned Rolls
+        </h2>
+        {isPurchase && hasBill && addCustomItem && (
+          <Button
+            type="button"
+            onClick={addCustomItem}
+            variant="outline"
+            size="sm"
+            className="border-brand-teal text-brand-teal hover:bg-teal-50"
+          >
+            <Plus className="h-4 w-4 mr-2" /> Add Custom Roll
+          </Button>
+        )}
+      </div>
+
+      {formData.items.length === 0 ? (
+        <Card className="shadow-sm border-dashed border-gray-300">
+          <CardContent className="flex flex-col justify-center items-center p-12 text-gray-500">
+            <Package className="h-12 w-12 text-gray-300 mb-3" />
+            <p>
+              {hasBill
+                ? "This bill has no rolls"
+                : `Select a ${isPurchase ? "supplier and purchase bill" : "customer and sales bill"} to load rolls`}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Product
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Roll No
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Bill Meters
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Returned Meters
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Price/Meter
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total
+                  </th>
+                  {isPurchase && (
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {formData.items.map((item: any, index: number) => {
+                  const isCustom = Boolean(item.is_custom);
+                  return (
+                    <tr key={item.row_key || `${item.purchase_item_id || "custom"}-${index}`}>
+                      <td className="px-4 py-3">
+                        {isCustom ? (
+                          <Select
+                            value={item.product_id}
+                            onValueChange={(value) => handleProductChange(index, value)}
+                          >
+                            <SelectTrigger className="w-full min-w-[180px]">
+                              <SelectValue placeholder="Select product" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {products.map((product) => (
+                                <SelectItem key={product.id} value={product.id}>
+                                  {product.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="font-medium text-gray-800">
+                            {item.product_name}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isCustom ? (
+                          <div className="space-y-1">
+                            <Input
+                              type="text"
+                              value={item.roll_no || ""}
+                              onChange={(e) =>
+                                handleItemChange(index, "roll_no", e.target.value)
+                              }
+                              placeholder="Custom roll no"
+                              disabled={!item.product_id}
+                            />
+                            <Badge variant="outline" className="text-xs">
+                              Custom
+                            </Badge>
+                          </div>
+                        ) : (
+                          <span className="font-medium">{item.roll_no || "-"}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">
+                        {isCustom ? "—" : Number(item.original_meters || 0).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.meters ?? 0}
+                          onChange={(e) =>
+                            handleItemChange(
+                              index,
+                              "meters",
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          placeholder="0"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.price ?? 0}
+                          onChange={(e) =>
+                            handleItemChange(
+                              index,
+                              "price",
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="number"
+                          value={(item.total_price || 0).toFixed(2)}
+                          readOnly
+                          className="bg-gray-50"
+                        />
+                      </td>
+                      {isPurchase && (
+                        <td className="px-4 py-3 text-right">
+                          {isCustom ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeItem(index)}
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          ) : null}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ReturnItems;

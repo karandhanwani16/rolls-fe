@@ -118,16 +118,6 @@ const SalesDetails = ({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="sales_by">Sales By</Label>
-                        <Input
-                            id="sales_by"
-                            value={formData.sales_by}
-                            onChange={(e) => handleChange('sales_by', e.target.value)}
-                            placeholder="Enter sales person name"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
                         <Label htmlFor="maker">Maker</Label>
                         <Input
                             id="maker"

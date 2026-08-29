@@ -11,7 +11,6 @@ import Invoices from "./pages/Invoices";
 import NewInvoice from "./pages/NewInvoice";
 import Customers from "./pages/Customers";
 import Suppliers from "./pages/Suppliers";
-import Grades from "./pages/Grades";
 import Godowns from "./pages/Godowns";
 import Products from "./pages/Products";
 import Transactions from "./pages/Transactions";
@@ -34,6 +33,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { FullPageLoading } from "@/components/ui/loading";
 import SalesForm from "./components/sales/SalesForm";
 import StockReport from "./pages/StockReport";
+import SalesReturns from "./pages/SalesReturns";
+import PurchaseReturns from "./pages/PurchaseReturns";
+import ReturnForm from "./components/returns/ReturnForm";
+import SalesReturnReport from "./pages/reports/SalesReturnReport";
+import PurchaseReturnReport from "./pages/reports/PurchaseReturnReport";
 
 const queryClient = new QueryClient();
 
@@ -102,11 +106,6 @@ const AppContent = () => {
               <Suppliers />
             </ProtectedRoute>
           } />
-          <Route path="/grades" element={
-            <ProtectedRoute>
-              <Grades />
-            </ProtectedRoute>
-          } />
           <Route path="/godowns" element={
             <ProtectedRoute>
               <Godowns />
@@ -162,6 +161,36 @@ const AppContent = () => {
               <SalesForm />
             </ProtectedRoute>
           } />
+          <Route path="/sales-returns" element={
+            <ProtectedRoute>
+              <SalesReturns />
+            </ProtectedRoute>
+          } />
+          <Route path="/sales-returns/new" element={
+            <ProtectedRoute>
+              <ReturnForm mode="sales" />
+            </ProtectedRoute>
+          } />
+          <Route path="/sales-returns/edit/:id" element={
+            <ProtectedRoute>
+              <ReturnForm mode="sales" />
+            </ProtectedRoute>
+          } />
+          <Route path="/purchase-returns" element={
+            <ProtectedRoute>
+              <PurchaseReturns />
+            </ProtectedRoute>
+          } />
+          <Route path="/purchase-returns/new" element={
+            <ProtectedRoute>
+              <ReturnForm mode="purchase" />
+            </ProtectedRoute>
+          } />
+          <Route path="/purchase-returns/edit/:id" element={
+            <ProtectedRoute>
+              <ReturnForm mode="purchase" />
+            </ProtectedRoute>
+          } />
           <Route path="/bill-to-bill" element={
             <ProtectedRoute>
               <BillToBillPayment />
@@ -207,6 +236,16 @@ const AppContent = () => {
           <Route path="/reports/purchases" element={
             <ProtectedRoute>
               <PurchaseReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/sales-returns" element={
+            <ProtectedRoute>
+              <SalesReturnReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/purchase-returns" element={
+            <ProtectedRoute>
+              <PurchaseReturnReport />
             </ProtectedRoute>
           } />
 

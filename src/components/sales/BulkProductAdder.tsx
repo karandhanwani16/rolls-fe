@@ -62,7 +62,7 @@ const BulkProductAdder = ({ products, onAddBulk }: BulkProductAdderProps) => {
               <SelectContent>
                 {products.map((product) => (
                   <SelectItem key={product.id} value={product.id}>
-                    {product.name} - {product.grade_name}
+                    {product.name}
                   </SelectItem>
                 ))}
               </SelectContent>

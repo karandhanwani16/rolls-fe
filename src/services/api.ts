@@ -126,26 +126,6 @@ export const suppliersAPI = {
   },
 };
 
-// Grades API
-export const gradesAPI = {
-  getAll: async () => {
-    const response = await api.get('/grades');
-    return response.data.data;
-  },
-  create: async (data: any) => {
-    const response = await api.post('/grades', data);
-    return response.data;
-  },
-  update: async (id: string, data: any) => {
-    const response = await api.put(`/grades/${id}`, data);
-    return response.data;
-  },
-  delete: async (id: string) => {
-    const response = await api.delete(`/grades/${id}`);
-    return response.data;
-  },
-};
-
 // Godowns API
 export const godownsAPI = {
   getAll: async () => {
@@ -180,8 +160,8 @@ export const dashboardAPI = {
 
 // Sales API
 export const salesAPI = {
-  getAll: async () => {
-    const response = await api.get('/sales');
+  getAll: async (params?: { customer_id?: string }) => {
+    const response = await api.get('/sales', { params });
     return response.data;
   },
   getById: async (id: string) => {
@@ -201,8 +181,10 @@ export const salesAPI = {
     });
     return response.data;
   },
-  getInvoiceHTML: async (id: string) => {
-    const response = await api.get(`/sales/invoice-html/${id}`);
+  getInvoiceHTML: async (id: string, type: "bill" | "challan" = "bill") => {
+    const response = await api.get(`/sales/invoice-html/${id}`, {
+      params: { type },
+    });
     return response.data;
   },
   getNextSalesNumber: async (date: string) => {
@@ -224,10 +206,64 @@ export const salesAPI = {
   },
 };
 
+export const salesReturnsAPI = {
+  getAll: async () => {
+    const response = await api.get('/sales-returns');
+    return response.data;
+  },
+  getById: async (id: string) => {
+    const response = await api.get(`/sales-returns/${id}`);
+    return response.data.data;
+  },
+  getNextNumber: async (date: string) => {
+    const response = await api.get(`/sales-returns/next-number?date=${date}`);
+    return response.data;
+  },
+  create: async (data: any) => {
+    const response = await api.post('/sales-returns', data);
+    return response.data;
+  },
+  update: async (id: string, data: any) => {
+    const response = await api.put(`/sales-returns/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: string) => {
+    const response = await api.delete(`/sales-returns/${id}`);
+    return response.data;
+  },
+};
+
+export const purchaseReturnsAPI = {
+  getAll: async () => {
+    const response = await api.get('/purchase-returns');
+    return response.data;
+  },
+  getById: async (id: string) => {
+    const response = await api.get(`/purchase-returns/${id}`);
+    return response.data.data;
+  },
+  getNextNumber: async (date: string) => {
+    const response = await api.get(`/purchase-returns/next-number?date=${date}`);
+    return response.data;
+  },
+  create: async (data: any) => {
+    const response = await api.post('/purchase-returns', data);
+    return response.data;
+  },
+  update: async (id: string, data: any) => {
+    const response = await api.put(`/purchase-returns/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: string) => {
+    const response = await api.delete(`/purchase-returns/${id}`);
+    return response.data;
+  },
+};
+
 // Purchases API
 export const purchasesAPI = {
-  getAll: async () => {
-    const response = await api.get('/purchases');
+  getAll: async (params?: { supplier_id?: string }) => {
+    const response = await api.get('/purchases', { params });
     return response.data;
   },
   getById: async (id: string) => {
@@ -236,6 +272,10 @@ export const purchasesAPI = {
   },
   getRollsByProductId: async (productId: string) => {
     const response = await api.get(`/purchases/rolls/${productId}`);
+    return response.data.data;
+  },
+  getSoldRollsByProductId: async (productId: string) => {
+    const response = await api.get(`/purchases/sold-rolls/${productId}`);
     return response.data.data;
   },
   getReport: async ({ supplierIds, startDate, endDate }: { supplierIds: string[], startDate: string, endDate: string }) => {

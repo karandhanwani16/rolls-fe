@@ -20,6 +20,7 @@ interface SalesItemRowProps {
   handleRollChange: (index: number, rollNo: string) => void;
   removeItem: (index: number) => void;
   availableRolls: any[];
+  defaultCustomRoll?: boolean;
 }
 
 const SalesItemRow: React.FC<SalesItemRowProps> = ({
@@ -31,40 +32,22 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
   handleRollChange,
   removeItem,
   availableRolls,
+  defaultCustomRoll = true,
 }) => {
   const [isCustomRoll, setIsCustomRoll] = useState(() => {
-    // Better detection for NEW vs EXISTING items:
-    // NEW: No roll_no and no purchase_item_id (completely empty item)
-    // EXISTING: Has roll_no or purchase_item_id (loaded from database)
     const isNewItem = !item.roll_no && !item.purchase_item_id;
-    
-    console.log('🔍 SalesItemRow init - Item data:', {
-      isNewItem,
-      sales_item_id: item.sales_item_id,
-      roll_no: item.roll_no,
-      purchase_item_id: item.purchase_item_id,
-      availableRollsCount: availableRolls.length
-    });
-    
+
     if (isNewItem) {
-      console.log('📝 New item - defaulting to dropdown mode');
-      return false; // Default to dropdown mode for new items
+      return defaultCustomRoll;
     }
-    
+
     // For existing items, detect if this should be treated as a custom roll:
     // 1. Has no purchase_item_id (definitely custom)
     // 2. Has a roll_no but it's not in the available rolls (stock roll no longer available)
     const hasNoPurchaseItemId = item.purchase_item_id === null || item.purchase_item_id === undefined || item.purchase_item_id === '';
     const rollNotInAvailable = item.roll_no && !availableRolls.some(roll => roll.roll_no === item.roll_no);
-    
-    console.log('🎯 Custom roll detection:', {
-      hasNoPurchaseItemId,
-      rollNotInAvailable,
-      willBeCustom: hasNoPurchaseItemId || rollNotInAvailable
-    });
-    
-    const initialValue = hasNoPurchaseItemId || rollNotInAvailable;
-    return initialValue;
+
+    return hasNoPurchaseItemId || rollNotInAvailable;
   });
 
   // Auto-detect if this should be custom mode when availableRolls change
@@ -149,7 +132,7 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
           <SelectContent>
             {products.map((product) => (
               <SelectItem key={product.id} value={product.id}>
-                {product.name} - {product.grade_name}
+                {product.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -219,6 +202,14 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
             </Select>
           )}
         </div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <Input
+          type="text"
+          value={item.shade || ''}
+          onChange={(e) => handleItemChange(index, 'shade', e.target.value)}
+          placeholder="Shade"
+        />
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <Input

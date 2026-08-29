@@ -5,7 +5,6 @@ import { toast } from "@/components/ui/use-toast";
 import {
   purchasesAPI,
   suppliersAPI,
-  gradesAPI,
   productsAPI,
   godownsAPI,
 } from "@/services/api";
@@ -22,8 +21,6 @@ interface PurchaseItem {
   purchase_id: string;
   product_id: string;
   product_name: string;
-  grade_id: string;
-  grade_name: string;
   roll_no: string;
   meters: number;
   price: number;
@@ -41,6 +38,7 @@ interface PurchaseFormData {
   description?: string;
   godown_no?: string;
   transport?: string;
+  transport_charges?: number;
   received_by?: string;
   items: PurchaseItem[];
 }
@@ -56,6 +54,7 @@ const PurchaseForm = () => {
     supplier_id: "",
     supplier_name: "",
     total_amount: 0,
+    transport_charges: 0,
     items: [],
   });
 
@@ -76,17 +75,6 @@ const PurchaseForm = () => {
     queryFn: async () => {
       setLoading(true);
       const response = await godownsAPI.getAll();
-      setLoading(false);
-      return response;
-    },
-  });
-
-  // Fetch grades data
-  const { data: grades = [] } = useQuery({
-    queryKey: ["grades"],
-    queryFn: async () => {
-      setLoading(true);
-      const response = await gradesAPI.getAll();
       setLoading(false);
       return response;
     },
@@ -155,6 +143,7 @@ const PurchaseForm = () => {
           description: response.description,
           godown_no: response.godown,
           transport: response.transport,
+          transport_charges: response.transport_charges || 0,
           received_by: response.received_by,
           items: items || [],
         }));
@@ -163,25 +152,34 @@ const PurchaseForm = () => {
     }
   }, [id]);
 
-  // Calculate total price for each item when meters or price changes
+  // Calculate total price for each item when meters, price, or transport charges change
   useEffect(() => {
     if (formData.items.length > 0) {
       const updatedItems = formData.items.map((item) => ({
         ...item,
         total_price: parseFloat((item.meters * item.price).toFixed(2)),
       }));
+      const itemsTotal = updatedItems.reduce(
+        (sum, item) => sum + item.total_price,
+        0
+      );
+      const transportCharges = formData.transport_charges || 0;
 
       setFormData((prev) => ({
         ...prev,
         items: updatedItems,
-        total_amount: parseFloat(
-          updatedItems
-            .reduce((sum, item) => sum + item.total_price, 0)
-            .toFixed(2)
-        ),
+        total_amount: parseFloat((itemsTotal + transportCharges).toFixed(2)),
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        total_amount: parseFloat((prev.transport_charges || 0).toFixed(2)),
       }));
     }
-  }, [formData.items.map((item) => `${item.meters}-${item.price}`).join(",")]);
+  }, [
+    formData.items.map((item) => `${item.meters}-${item.price}`).join(","),
+    formData.transport_charges,
+  ]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,11 +225,6 @@ const PurchaseForm = () => {
     if (product.price) {
       formData.items[index].price = parseFloat(product.price.toFixed(2));
     }
-
-    if (product.grade_id) {
-      formData.items[index].grade_id = product?.grade_id || "";
-      formData.items[index].grade_name = product?.grade_name || "";
-    }
     formData.items[index].product_id = product?.id || "";
     formData.items[index].product_name = product?.name || "";
     setFormData({
@@ -250,8 +243,6 @@ const PurchaseForm = () => {
           purchase_id: id || "",
           product_id: "",
           product_name: "",
-          grade_id: "",
-          grade_name: "",
           roll_no: "",
           meters: 0,
           price: 0,
@@ -284,8 +275,6 @@ const PurchaseForm = () => {
         purchase_id: id || "",
         product_id: product.id,
         product_name: product.name,
-        grade_id: product.grade_id || "",
-        grade_name: product.grade_name || "",
         roll_no: "",
         meters: 0,
         price: product.price || 0,
@@ -308,11 +297,11 @@ const PurchaseForm = () => {
   const getGroupedMeters = () => {
     const groupMap = new Map<
       string,
-      { product_name: string; grade_name: string; total_meters: number }
+      { product_name: string; total_meters: number }
     >();
 
     formData.items.forEach((item) => {
-      const key = `${item.product_id}_${item.grade_id}`;
+      const key = item.product_id;
       const current = groupMap.get(key);
 
       if (current) {
@@ -320,7 +309,6 @@ const PurchaseForm = () => {
       } else {
         groupMap.set(key, {
           product_name: item.product_name,
-          grade_name: item.grade_name,
           total_meters: item.meters,
         });
       }
@@ -389,12 +377,12 @@ const PurchaseForm = () => {
         <div className="flex justify-end items-center gap-4 text-lg font-semibold">
           <div className="mt-6 border-t pt-4">
             <h3 className="text-lg font-semibold text-gray-800">
-              Total Meters by Product & Grade
+              Total Meters by Product
             </h3>
             <ul className="text-sm text-gray-700 space-y-1">
               {getGroupedMeters().map((group, idx) => (
                 <li key={idx}>
-                  {group.product_name} - {group.grade_name}:{" "}
+                  {group.product_name}:{" "}
                   {group.total_meters.toFixed(2)} meters
                 </li>
               ))}

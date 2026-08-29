@@ -15,6 +15,8 @@ interface SalesItemsProps {
     removeItem: (index: number) => void;
     handleBulkAdd: (productId: string, count: number) => void;
     getAvailableRolls: (productId: string, index: number) => any[];
+    title?: string;
+    defaultCustomRoll?: boolean;
 }
 
 const SalesItems = ({
@@ -28,13 +30,15 @@ const SalesItems = ({
     removeItem,
     handleBulkAdd,
     getAvailableRolls,
+    title = "Sale Items",
+    defaultCustomRoll = true,
 }: SalesItemsProps) => {
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                     <Package className="h-5 w-5 text-brand-teal" />
-                    Sale Items
+                    {title}
                 </h2>
                 <div>
                     <BulkProductAdder
@@ -77,6 +81,7 @@ const SalesItems = ({
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shade</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Meters</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price/Meter</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
@@ -95,6 +100,7 @@ const SalesItems = ({
                                         handleRollChange={handleRollChange}
                                         removeItem={removeItem}
                                         availableRolls={getAvailableRolls(item.product_id, index)}
+                                        defaultCustomRoll={defaultCustomRoll}
                                     />
                                 ))}
                             </tbody>

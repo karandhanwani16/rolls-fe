@@ -33,7 +33,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth } from "@/contexts/AuthContext";
-import { productsAPI, gradesAPI } from "@/services/api";
+import { productsAPI } from "@/services/api";
 
 // Product type definition
 type Product = {
@@ -41,18 +41,10 @@ type Product = {
   name: string;
   description: string | null;
   width: string | null;
-  grade_id: string | null;
-  grade_name: string | null;
   price: number | null;
   color: string | null;
   created_at: string;
   updated_at: string;
-};
-
-// Grade type definition
-type Grade = {
-  id: string;
-  name: string;
 };
 
 // Product form schema
@@ -60,7 +52,6 @@ const productFormSchema = z.object({
   name: z.string().min(1, "Product name is required"),
   description: z.string().nullable(),
   width: z.string().nullable(),
-  grade_id: z.string().nullable(),
   price: z.coerce.number().nullable(),
   color: z.string().nullable(),
 });
@@ -75,7 +66,6 @@ const Products = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(false);
 
   const form = useForm<ProductFormValues>({
@@ -83,7 +73,6 @@ const Products = () => {
     defaultValues: {
       name: "",
       description: "",
-      grade_id: "",
       width: "",
       price: 0,
       color: "",
@@ -95,31 +84,11 @@ const Products = () => {
     defaultValues: {
       name: "",
       description: "",
-      grade_id: "",
       price: 0,
       color: "",
       width: "",
     },
   });
-
-  // Fetch grades
-  useEffect(() => {
-    const fetchGrades = async () => {
-      if (user) {
-        try {
-          const gradesData = await gradesAPI.getAll();
-          setGrades(gradesData);
-        } catch (error) {
-          toast({
-            title: "Error fetching grades",
-            description: (error as Error).message,
-            variant: "destructive",
-          });
-        }
-      }
-    };
-    fetchGrades();
-  }, [user, toast]);
 
   useEffect(() => {
     if (!isAddDialogOpen) {
@@ -132,7 +101,6 @@ const Products = () => {
       editForm.reset({
         name: selectedProduct.name,
         description: selectedProduct.description,
-        grade_id: selectedProduct.grade_id,
         price: selectedProduct.price,
         color: selectedProduct.color,
         width: selectedProduct.width,
@@ -187,7 +155,6 @@ const Products = () => {
       await productsAPI.create(values as { 
         name: string; 
         description?: string;
-        grade_id?: string;
         price?: number;
         color?: string;
         width?: string;
@@ -224,7 +191,6 @@ const Products = () => {
       await productsAPI.update(selectedProduct.id, values as { 
         name: string; 
         description?: string;
-        grade_id?: string;
         price?: number;
         color?: string;
         width?: string;
@@ -310,7 +276,6 @@ const Products = () => {
                 <TableRow>
                   <TableHead>Product Name</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead>Grade</TableHead>
                   <TableHead>Width</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Color</TableHead>
@@ -333,7 +298,6 @@ const Products = () => {
                         {product.name}
                       </TableCell>
                       <TableCell>{product.description || "N/A"}</TableCell>
-                      <TableCell>{product.grade_name || "N/A"}</TableCell>
                       <TableCell>{product.width || "N/A"}</TableCell>
                       <TableCell>{product.price ? `₹${product.price.toFixed(2)}` : "N/A"}</TableCell>
                       <TableCell>
@@ -443,29 +407,6 @@ const Products = () => {
               />
               <FormField
                 control={form.control}
-                name="grade_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Grade</FormLabel>
-                    <FormControl>
-                      <select
-                        {...field}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="">Select a grade</option>
-                        {grades.map((grade) => (
-                          <option key={grade.id} value={grade.id}>
-                            {grade.name}
-                          </option>
-                        ))}
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="price"
                 render={({ field }) => (
                   <FormItem>
@@ -556,29 +497,6 @@ const Products = () => {
                     <FormLabel>Width</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Enter Width" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="grade_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Grade</FormLabel>
-                    <FormControl>
-                      <select
-                        {...field}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="">Select a grade</option>
-                        {grades.map((grade) => (
-                          <option key={grade.id} value={grade.id}>
-                            {grade.name}
-                          </option>
-                        ))}
-                      </select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

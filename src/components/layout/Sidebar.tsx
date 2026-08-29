@@ -11,7 +11,6 @@ import {
   X,
   ChevronRight,
   BoxesIcon,
-  TagIcon,
   TruckIcon,
   ShoppingBag,
   ShoppingCart,
@@ -22,7 +21,7 @@ import {
   ArrowUpFromLine,
   LayoutDashboard,
   BarChart2,
-  FileSpreadsheet
+  Undo2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -117,11 +116,6 @@ const Sidebar = () => {
       path: "/suppliers",
     },
     {
-      title: "Grades",
-      icon: TagIcon,
-      path: "/grades",
-    },
-    {
       title: "Godowns",
       icon: BoxesIcon,
       path: "/godowns",
@@ -145,6 +139,16 @@ const Sidebar = () => {
       title: "Sales",
       icon: ShoppingBag,
       path: "/sales",
+    },
+    {
+      title: "Sales Return",
+      icon: Undo2,
+      path: "/sales-returns",
+    },
+    {
+      title: "Purchase Return",
+      icon: Undo2,
+      path: "/purchase-returns",
     },
     {
       title: "Payment In",
@@ -247,6 +251,8 @@ const Sidebar = () => {
     { label: "Supplier Report", to: "/reports/suppliers" },
     { label: "Sales Report", to: "/reports/sales" },
     { label: "Purchase Report", to: "/reports/purchases" },
+    { label: "Sales Return Report", to: "/reports/sales-returns" },
+    { label: "Purchase Return Report", to: "/reports/purchase-returns" },
     // { label: "Payment In Report", to: "/reports/payments-in" },
     // { label: "Payment Out Report", to: "/reports/payments-out" },
   ];

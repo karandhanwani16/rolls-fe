@@ -121,7 +121,8 @@ const SalesReport = () => {
       "Total", 
       "Description",
       "Hamaal",
-      "Challan No"
+      "Challan No",
+      "Transport Charges"
     ];
     const csvContent = [
       headers.join(","),
@@ -134,6 +135,7 @@ const SalesReport = () => {
           `"${sale.description || ''}"`,
           `"${sale.hamaal || ''}"`,
           `"${sale.challan_no || ''}"`,
+          sale.transport_charges || 0,
         ].join(",");
       }),
     ].join("\n");
@@ -193,14 +195,14 @@ const SalesReport = () => {
     // Add sales table
     autoTable(doc, {
       startY: 75,
-      head: [["Sales No", "Customer", "Date", "Total", "Challan No", "Sales By"]],
+      head: [["Sales No", "Customer", "Date", "Total", "Challan No", "Transport Charges"]],
       body: filteredSales.map((sale) => [
         sale.sales_no,
         sale.customer_name,
         format(new Date(sale.date), "dd/MM/yyyy"),
         `₹${formatAmount(sale.total)}`,
         sale.challan_no || "-",
-        sale.sales_by || "-"
+        `₹${formatAmount(sale.transport_charges || 0)}`
       ]),
       styles: {
         fontSize: 9,
@@ -413,7 +415,7 @@ const SalesReport = () => {
                     <TableHead className="text-white">Date</TableHead>
                     <TableHead className="text-white">Total</TableHead>
                     <TableHead className="text-white">Challan No</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Sales By</TableHead>
+                    <TableHead className="text-white rounded-tr-lg">Transport Charges</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -428,7 +430,7 @@ const SalesReport = () => {
                             {formatAmount(sale.total)}
                           </TableCell>
                           <TableCell>{sale.challan_no || "-"}</TableCell>
-                          <TableCell>{sale.sales_by || "-"}</TableCell>
+                          <TableCell>{formatAmount(sale.transport_charges || 0)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="border-t-2 border-sidebar/20">

@@ -27,7 +27,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Check, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { Check, AlertCircle, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -63,6 +63,7 @@ const BillToBillPayment = () => {
   const [processingPayment, setProcessingPayment] = useState<boolean>(false);
   const [reconciliationData, setReconciliationData] = useState<any>(null);
   const [calculatedStatus, setCalculatedStatus] = useState<any[]>([]);
+  const [showFullyPaid, setShowFullyPaid] = useState(false);
   
   useEffect(() => {
     fetchCustomers();
@@ -86,12 +87,12 @@ const BillToBillPayment = () => {
     }
   };
 
-  const fetchReconciliationData = async () => {
-    if (!selectedCustomerId) return;
+  const fetchReconciliationData = async (customerId = selectedCustomerId) => {
+    if (!customerId) return;
     
     setLoading(true);
     try {
-      const response = await billPaymentsAPI.getReconciliationData(selectedCustomerId);
+      const response = await billPaymentsAPI.getReconciliationData(customerId);
       setReconciliationData(response.data);
       calculatePaymentStatus(response.data);
     } catch (error) {
@@ -224,6 +225,13 @@ const BillToBillPayment = () => {
     }).format(amount);
   };
 
+  const fullyPaidCount = calculatedStatus.filter(
+    (sale) => sale.status === "FULL"
+  ).length;
+  const visibleSales = showFullyPaid
+    ? calculatedStatus
+    : calculatedStatus.filter((sale) => sale.status !== "FULL");
+
   const handleSettleBill = async (saleId: string) => {
     if (!selectedCustomerId || !reconciliationData) return;
     
@@ -314,7 +322,7 @@ const BillToBillPayment = () => {
                   value={selectedCustomerId}
                   onValueChange={(value) => {
                     setSelectedCustomerId(value);
-                    fetchReconciliationData();
+                    fetchReconciliationData(value);
                   }}
                 >
                   <SelectTrigger>
@@ -450,7 +458,17 @@ const BillToBillPayment = () => {
                       Bill-to-bill payment reconciliation against sales invoices
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-4">
+                    {fullyPaidCount > 0 && (
+                      <Button
+                        type="button"
+                        variant={showFullyPaid ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setShowFullyPaid((prev) => !prev)}
+                      >
+                        {showFullyPaid ? "Hide fully paid" : `Show fully paid (${fullyPaidCount})`}
+                      </Button>
+                    )}
                     <Button 
                       className="hidden"
                       onClick={handleSettleAll} 
@@ -466,80 +484,81 @@ const BillToBillPayment = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {reconciliationData.total_payment_amount <= 0 ? (
+                  {reconciliationData.total_payment_amount <= 0 && (
                     <Alert className="mb-4">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
                         No payment amount available for reconciliation.
                       </AlertDescription>
                     </Alert>
-                  ) : (
-                    <div className="rounded-md border overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>No.</TableHead>
-                            <TableHead>Invoice No.</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-right">Total Amount</TableHead>
-                            <TableHead className="text-right">Already Cleared</TableHead>
-                            <TableHead className="text-right">To Be Cleared</TableHead>
-                            <TableHead>Current Status</TableHead>
-                            <TableHead>New Status</TableHead>
-                            <TableHead>Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {calculatedStatus.length > 0 ? (
-                            calculatedStatus.map((sale, index) => (
-                              <TableRow key={sale.id}>
-                                <TableCell>{index + 1}</TableCell>
-                                <TableCell>{sale.sales_no}</TableCell>
-                                <TableCell>
-                                  {format(new Date(sale.date), "dd MMM yyyy")}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {formatCurrency(sale.total)}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {formatCurrency(sale.cleared_amount)}
-                                </TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {formatCurrency(sale.new_cleared_amount || 0)}
-                                </TableCell>
-                                <TableCell>{getStatusBadge(sale.status)}</TableCell>
-                                <TableCell>
-                                  {sale.new_status && sale.new_status !== sale.status ? (
-                                    getStatusBadge(sale.new_status)
-                                  ) : (
-                                    <span>-</span>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {sale.can_settle && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleSettleBill(sale.id)}
-                                      disabled={processingPayment}
-                                    >
-                                      Settle
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          ) : (
-                            <TableRow>
-                              <TableCell colSpan={9} className="text-center py-4">
-                                No sales data available
+                  )}
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>No.</TableHead>
+                          <TableHead>Invoice No.</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead className="text-right">Total Amount</TableHead>
+                          <TableHead className="text-right">Already Cleared</TableHead>
+                          <TableHead className="text-right">To Be Cleared</TableHead>
+                          <TableHead>Current Status</TableHead>
+                          <TableHead>New Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleSales.length > 0 ? (
+                          visibleSales.map((sale, index) => (
+                            <TableRow key={sale.id}>
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell>{sale.sales_no}</TableCell>
+                              <TableCell>
+                                {format(new Date(sale.date), "dd MMM yyyy")}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(sale.total)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(sale.cleared_amount)}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(sale.new_cleared_amount || 0)}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(sale.status)}</TableCell>
+                              <TableCell>
+                                {sale.new_status && sale.new_status !== sale.status ? (
+                                  getStatusBadge(sale.new_status)
+                                ) : (
+                                  <span>-</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {sale.can_settle && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSettleBill(sale.id)}
+                                    disabled={processingPayment}
+                                  >
+                                    Settle
+                                  </Button>
+                                )}
                               </TableCell>
                             </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={9} className="text-center py-4">
+                              {fullyPaidCount > 0
+                                ? "All bills are fully paid. Turn on Show fully paid to view them."
+                                : "No sales data available"}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </div>

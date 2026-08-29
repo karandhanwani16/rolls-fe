@@ -72,7 +72,7 @@ class PdfService {
       }
 
       // Invoice items table
-      const tableColumn = ["S.No", "Product", "Grade", "Roll No.", "Meters", "Price", "Total"];
+      const tableColumn = ["S.No", "Product", "Roll No.", "Shade", "Meters", "Price", "Total"];
       const tableRows: any[] = [];
 
       // Add items to table
@@ -80,11 +80,11 @@ class PdfService {
         const tableRow = [
           index + 1,
           item.product_name || '-',
-          '', // Grade column (empty for now)
           item.roll_no || '-',
+          item.shade || '-',
           item.meters.toFixed(2),
           item.price.toFixed(2),
-          item.total.toFixed(2)
+          (item.total ?? item.total_price).toFixed(2)
         ];
         tableRows.push(tableRow);
       });
@@ -103,7 +103,8 @@ class PdfService {
             0: { cellWidth: 10 },
             4: { halign: 'right' },
             5: { halign: 'right' },
-            6: { halign: 'right' }
+            6: { halign: 'right' },
+            7: { halign: 'right' }
           },
           didDrawPage: (data) => {
             doc.text('Page ' + data.pageNumber, pageWidth - 20, doc.internal.pageSize.height - 10);

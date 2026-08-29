@@ -112,7 +112,7 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
 
                 <Separator className="my-6" />
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="space-y-2 md:col-span-1">
                         <Label htmlFor="godown_no" className="text-sm font-medium">
                             <span className="flex items-center gap-1">
@@ -159,6 +159,37 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                     </div>
 
                     <div className="space-y-2 md:col-span-1">
+                        <Label htmlFor="transport_charges" className="text-sm font-medium">
+                            <span className="flex items-center gap-1">
+                                <DollarSign className="h-3.5 w-3.5 text-gray-500" />
+                                Transport Charges
+                            </span>
+                        </Label>
+                        <Input
+                            id="transport_charges"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.transport_charges ?? 0}
+                            onChange={(e) => {
+                                const transport_charges = parseFloat(e.target.value) || 0;
+                                const itemsTotal = (formData.items || []).reduce(
+                                    (sum: number, item: any) =>
+                                        sum + (item.total_price || item.meters * item.price || 0),
+                                    0
+                                );
+                                setFormData({
+                                    ...formData,
+                                    transport_charges,
+                                    total_amount: parseFloat((itemsTotal + transport_charges).toFixed(2)),
+                                });
+                            }}
+                            placeholder="0.00"
+                            className="focus-visible:ring-brand-teal"
+                        />
+                    </div>
+
+                    <div className="space-y-2 md:col-span-1">
                         <Label htmlFor="received_by" className="text-sm font-medium">
                             <span className="flex items-center gap-1">
                                 <User className="h-3.5 w-3.5 text-gray-500" />
@@ -176,7 +207,7 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                         />
                     </div>
 
-                    <div className="space-y-2 md:col-span-3">
+                    <div className="space-y-2 md:col-span-2 lg:col-span-4">
                         <Label htmlFor="description" className="text-sm font-medium">Description</Label>
                         <Textarea
                             id="description"

@@ -121,7 +121,7 @@ const PurchaseItemRow = forwardRef<HTMLInputElement, PurchaseItemRowProps>(
               {products && Array.isArray(products) && products.length > 0 ? (
                 products.map((product) => (
                   <SelectItem key={product.id} value={product.id}>
-                    {product.name} - {product.grade_name}
+                    {product.name}
                   </SelectItem>
                 ))
               ) : (
@@ -131,9 +131,6 @@ const PurchaseItemRow = forwardRef<HTMLInputElement, PurchaseItemRowProps>(
               )}
             </SelectContent>
           </Select>
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          {item.grade_name ? item.grade_name : "-"}
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
           <Input

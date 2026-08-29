@@ -57,8 +57,6 @@ interface Product {
   id: string;
   name: string;
   description: string | null;
-  grade_id: string | null;
-  grade_name: string | null;
   price: number | null;
   color: string | null;
   width: string | null;
@@ -302,7 +300,7 @@ const StockReport = () => {
                                   : "opacity-0"
                               )}
                             />
-                            {product.name} - {product.grade_name}
+                            {product.name}
                           </CommandItem>
                         ))}
                       </CommandGroup>

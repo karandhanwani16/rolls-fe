@@ -53,6 +53,7 @@ type Purchase = {
   description?: string;
   godown?: string;
   transport?: string;
+  transport_charges?: number;
   received_by?: string;
   created_at: string;
   updated_at: string;

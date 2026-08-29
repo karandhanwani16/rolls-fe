@@ -30,17 +30,15 @@ import {
   Search,
   Plus,
   MoreVertical,
-  Download,
   Eye,
   Trash2,
+  Printer,
+  FileText,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import pdfService from "@/services/pdfService";
-import axios from "axios";
-import { saveAs } from "file-saver";
-import html2pdf from "html2pdf.js";
+import { downloadSalePdf } from "@/lib/downloadSalePdf";
 
 const Sales = () => {
   const [sales, setSales] = useState<any[]>([]);
@@ -86,7 +84,7 @@ const Sales = () => {
   const handleViewSale = async (id: string) => {
     try {
       const response = await salesAPI.getById(id);
-      setSelectedSale(response.data);
+      setSelectedSale(response);
       setViewDialogOpen(true);
     } catch (error) {
       console.error("Error fetching sale details:", error);
@@ -94,45 +92,36 @@ const Sales = () => {
     }
   };
 
-  const handleDownloadInvoice = async (id: string) => {
+  const handleDownloadDocument = async (
+    id: string,
+    type: "bill" | "challan"
+  ) => {
     try {
-      toast.info("Generating invoice PDF...");
+      toast.info(
+        type === "challan"
+          ? "Generating challan PDF..."
+          : "Generating sales bill PDF..."
+      );
 
-      // Get the HTML from backend
-      const response = await salesAPI.getInvoiceHTML(id);
-      if (!response.success || !response.data) {
-        throw new Error("Failed to get invoice HTML");
-      }
-
-      // Find the sale to get the sales_no
-      const sale = sales.find((s) => s.id === id);
+      const sale = sales.find((s) => s.id === id) || selectedSale;
       if (!sale) {
         throw new Error("Sale not found");
       }
 
-      // Create a temporary div to hold the HTML
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = response.data;
-      document.body.appendChild(tempDiv);
+      await downloadSalePdf(id, sale.sales_no, type);
 
-      // Generate PDF
-      const options = {
-        margin: 10,
-        filename: `invoice_${sale.sales_no}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      };
-
-      await html2pdf().set(options).from(tempDiv).save();
-
-      // Clean up
-      document.body.removeChild(tempDiv);
-
-      toast.success("Invoice downloaded successfully");
+      toast.success(
+        type === "challan"
+          ? "Challan downloaded successfully"
+          : "Sales bill downloaded successfully"
+      );
     } catch (error) {
-      console.error("Error downloading invoice:", error);
-      toast.error("Failed to download invoice");
+      console.error("Error downloading document:", error);
+      toast.error(
+        type === "challan"
+          ? "Failed to download challan"
+          : "Failed to download sales bill"
+      );
     }
   };
 
@@ -226,10 +215,20 @@ const Sales = () => {
                                   <Eye className="mr-2 h-4 w-4" /> View
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => handleDownloadInvoice(sale.id)}
+                                  onClick={() =>
+                                    handleDownloadDocument(sale.id, "challan")
+                                  }
                                 >
-                                  <Download className="mr-2 h-4 w-4" /> Download
-                                  Invoice
+                                  <Printer className="mr-2 h-4 w-4" /> Print
+                                  Challan
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleDownloadDocument(sale.id, "bill")
+                                  }
+                                >
+                                  <FileText className="mr-2 h-4 w-4" /> Print
+                                  Sales Bill
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleDeleteSale(sale.id)}
@@ -282,8 +281,14 @@ const Sales = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Sales By</p>
-                  <p className="font-medium">{selectedSale.sales_by || "-"}</p>
+                  <p className="text-sm text-gray-500">Transport Charges</p>
+                  <p className="font-medium">
+                    {new Intl.NumberFormat("en-IN", {
+                      style: "currency",
+                      currency: "INR",
+                      maximumFractionDigits: 2,
+                    }).format(selectedSale.transport_charges || 0)}
+                  </p>
                 </div>
               </div>
 
@@ -295,6 +300,7 @@ const Sales = () => {
                       <TableRow>
                         <TableHead>Product</TableHead>
                         <TableHead>Roll No</TableHead>
+                        <TableHead>Shade</TableHead>
                         <TableHead className="text-right">Meters</TableHead>
                         <TableHead className="text-right">Price</TableHead>
                         <TableHead className="text-right">Total</TableHead>
@@ -306,6 +312,7 @@ const Sales = () => {
                           <TableRow key={item.id}>
                             <TableCell>{item.product_name}</TableCell>
                             <TableCell>{item.roll_no || "-"}</TableCell>
+                            <TableCell>{item.shade || "-"}</TableCell>
                             <TableCell className="text-right">
                               {item.meters.toFixed(2)}
                             </TableCell>
@@ -313,13 +320,13 @@ const Sales = () => {
                               ₹{item.price.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-right">
-                              ₹{item.total_price.toFixed(2)}
+                              ₹{(item.total_price ?? item.total)?.toFixed(2)}
                             </TableCell>
                           </TableRow>
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-4">
+                          <TableCell colSpan={6} className="text-center py-4">
                             No items found
                           </TableCell>
                         </TableRow>
@@ -350,9 +357,21 @@ const Sales = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end mt-4">
-                <Button onClick={() => handleDownloadInvoice(selectedSale.id)}>
-                  <Download className="mr-1 h-4 w-4" /> Download Invoice
+              <div className="flex justify-end mt-4 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    handleDownloadDocument(selectedSale.id, "challan")
+                  }
+                >
+                  <Printer className="mr-1 h-4 w-4" /> Print Challan
+                </Button>
+                <Button
+                  onClick={() =>
+                    handleDownloadDocument(selectedSale.id, "bill")
+                  }
+                >
+                  <FileText className="mr-1 h-4 w-4" /> Print Sales Bill
                 </Button>
               </div>
             </div>
