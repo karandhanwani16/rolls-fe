@@ -50,6 +50,8 @@ type Customer = {
   description: string | null;
   city: string | null;
   type: string | null;
+  opening_balance: number;
+  opening_balance_date: string | null;
   created_at: string;
   updated_at: string;
   // Frontend-only properties
@@ -64,7 +66,15 @@ const customerFormSchema = z.object({
   description: z.string().nullable(),
   city: z.string().nullable(),
   type: z.string().nullable(),
-});
+  opening_balance: z.coerce.number().default(0),
+  opening_balance_date: z.string().nullable(),
+}).refine(
+  (data) => data.opening_balance === 0 || (data.opening_balance_date && data.opening_balance_date.length > 0),
+  {
+    message: "Opening balance date is required when opening balance is set",
+    path: ["opening_balance_date"],
+  }
+);
 
 type CustomerFormValues = z.infer<typeof customerFormSchema>;
 
@@ -87,6 +97,8 @@ const Customers = () => {
       description: "",
       city: "",
       type: "",
+      opening_balance: 0,
+      opening_balance_date: "",
     },
   });
 
@@ -98,6 +110,8 @@ const Customers = () => {
       description: "",
       city: "",
       type: "",
+      opening_balance: 0,
+      opening_balance_date: "",
     },
   });
 
@@ -115,6 +129,10 @@ const Customers = () => {
         description: selectedCustomer.description,
         city: selectedCustomer.city,
         type: selectedCustomer.type,
+        opening_balance: selectedCustomer.opening_balance ?? 0,
+        opening_balance_date: selectedCustomer.opening_balance_date
+          ? selectedCustomer.opening_balance_date.slice(0, 10)
+          : "",
       });
     }
   }, [selectedCustomer, isEditDialogOpen, editForm]);
@@ -188,6 +206,8 @@ const Customers = () => {
         customer_description: values.description,
         customer_city: values.city,
         customer_type: values.type,
+        opening_balance: values.opening_balance,
+        opening_balance_date: values.opening_balance_date || null,
       };
       await customersAPI.create(backendData);
       toast({
@@ -225,6 +245,8 @@ const Customers = () => {
         customer_description: values.description,
         customer_city: values.city,
         customer_type: values.type,
+        opening_balance: values.opening_balance,
+        opening_balance_date: values.opening_balance_date || null,
       };
       await customersAPI.update(selectedCustomer.id, backendData);
       toast({
@@ -310,6 +332,7 @@ const Customers = () => {
                   <TableHead>Type</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>City</TableHead>
+                  <TableHead>Opening Balance</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -317,7 +340,7 @@ const Customers = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Loading customers...
                     </TableCell>
                   </TableRow>
@@ -341,6 +364,20 @@ const Customers = () => {
                           <MapPin className="h-3 w-3 mr-1" /> {customer.city}
                         </div>
                       )}</TableCell>
+                      <TableCell>
+                        {customer.opening_balance ? (
+                          <div className="text-sm">
+                            <div>{formatCurrency(customer.opening_balance)}</div>
+                            {customer.opening_balance_date && (
+                              <div className="text-xs text-muted-foreground">
+                                as on {customer.opening_balance_date.slice(0, 10)}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                       <TableCell>{customer.description}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -375,7 +412,7 @@ const Customers = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       No customers found.
                     </TableCell>
                   </TableRow>
@@ -451,6 +488,41 @@ const Customers = () => {
                     <FormLabel>City</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Enter city" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="opening_balance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opening Balance (₹)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...field}
+                        placeholder="0"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="opening_balance_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opening Balance Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={field.value || ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -563,6 +635,41 @@ const Customers = () => {
                     <FormLabel>City</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Enter city" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="opening_balance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opening Balance (₹)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...field}
+                        placeholder="0"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="opening_balance_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opening Balance Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={field.value || ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

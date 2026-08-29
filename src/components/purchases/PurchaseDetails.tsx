@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, Truck, Warehouse, User, FileText, DollarSign } from 'lucide-react';
+import { useFormSectionNavigation } from '@/lib/formKeyboardNavigation';
 
 interface PurchaseDetailsProps {
     formData: any;
@@ -14,6 +15,8 @@ interface PurchaseDetailsProps {
 }
 
 const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: PurchaseDetailsProps) => {
+    const { containerRef, onKeyDownCapture } = useFormSectionNavigation();
+
     return (
         <Card className="shadow-sm border-gray-200">
             <CardHeader className="pb-3">
@@ -22,7 +25,7 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                     Purchase Details
                 </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent ref={containerRef} onKeyDownCapture={onKeyDownCapture}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="space-y-2">
                         <Label htmlFor="purchase_no" className="text-sm font-medium">

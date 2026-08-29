@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
-import { forwardRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 
 interface PurchaseItemRowProps {
   item: any;
@@ -17,40 +17,32 @@ interface PurchaseItemRowProps {
   handleItemChange: (index: number, field: string, value: any) => void;
   handleProductChange: (index: number, productId: string) => void;
   removeItem: (index: number) => void;
-  onFocusNext?: (field: string) => void;
-  onFocusPrevious?: (field: string) => void;
+  setRef: (field: string, index: number) => (element: HTMLInputElement | null) => void;
+  createKeyDownHandler: (
+    index: number,
+    field: string
+  ) => (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
 }
 
-const PurchaseItemRow = forwardRef<HTMLInputElement, PurchaseItemRowProps>(
-  (
-    {
-      item,
-      index,
-      products,
-      handleItemChange,
-      handleProductChange,
-      removeItem,
-      onFocusNext,
-      onFocusPrevious,
-    },
-    ref
-  ) => {
-    const [metersInput, setMetersInput] = useState(item.meters.toString());
-    const [priceInput, setPriceInput] = useState(item.price.toString());
+const PurchaseItemRow = ({
+  item,
+  index,
+  products,
+  handleItemChange,
+  handleProductChange,
+  removeItem,
+  setRef,
+  createKeyDownHandler,
+}: PurchaseItemRowProps) => {
+  const [metersInput, setMetersInput] = useState(item.meters.toString());
+  const [priceInput, setPriceInput] = useState(item.price.toString());
 
-    const handleKeyDown = (
-      e: React.KeyboardEvent<HTMLInputElement>,
-      field: string
-    ) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (e.shiftKey) {
-          onFocusPrevious?.(field);
-        } else {
-          onFocusNext?.(field);
-        }
-      }
-    };
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    field: string
+  ) => {
+    createKeyDownHandler(index, field)(e);
+  };
 
     const handleNumericChange = (value: string, field: "meters" | "price") => {
       // If the value is empty or just a minus sign, keep it as is
@@ -134,7 +126,7 @@ const PurchaseItemRow = forwardRef<HTMLInputElement, PurchaseItemRowProps>(
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
           <Input
-            ref={ref}
+            ref={setRef("roll_no", index)}
             value={item.roll_no}
             onChange={(e) => handleItemChange(index, "roll_no", e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, "roll_no")}
@@ -145,6 +137,7 @@ const PurchaseItemRow = forwardRef<HTMLInputElement, PurchaseItemRowProps>(
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
           <Input
+            ref={setRef("meters", index)}
             type="text"
             inputMode="decimal"
             value={metersInput}
@@ -159,6 +152,7 @@ const PurchaseItemRow = forwardRef<HTMLInputElement, PurchaseItemRowProps>(
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
           <Input
+            ref={setRef("price", index)}
             type="text"
             inputMode="decimal"
             value={priceInput}
@@ -192,9 +186,6 @@ const PurchaseItemRow = forwardRef<HTMLInputElement, PurchaseItemRowProps>(
         </td>
       </tr>
     );
-  }
-);
-
-PurchaseItemRow.displayName = "PurchaseItemRow";
+};
 
 export default PurchaseItemRow;

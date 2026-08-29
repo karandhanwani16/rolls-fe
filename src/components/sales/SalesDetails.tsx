@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from 'lucide-react';
+import { useFormSectionNavigation } from '@/lib/formKeyboardNavigation';
 
 interface SalesDetailsProps {
     formData: any;
@@ -18,6 +19,8 @@ const SalesDetails = ({
     customers,
     godowns,
 }: SalesDetailsProps) => {
+    const { containerRef, onKeyDownCapture } = useFormSectionNavigation();
+
     const handleChange = (field: string, value: any) => {
         setFormData((prev: any) => ({
             ...prev,
@@ -33,7 +36,11 @@ const SalesDetails = ({
                     Sale Details
                 </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent
+                ref={containerRef}
+                onKeyDownCapture={onKeyDownCapture}
+                className="space-y-6"
+            >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                         <Label htmlFor="sales_no">Sale No</Label>

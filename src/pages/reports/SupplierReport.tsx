@@ -51,7 +51,7 @@ const SupplierReport = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const [selectedSupplier, setSelectedSupplier] = useState<string>("");
-  const [transactions, setTransactions] = useState<{ data: any[] }>({ data: [] });
+  const [transactions, setTransactions] = useState<{ data: any[]; summary?: any }>({ data: [] });
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [supplierOpen, setSupplierOpen] = useState(false);
@@ -94,7 +94,10 @@ const SupplierReport = () => {
         startDate,
         endDate
       });
-      setTransactions(data);
+      setTransactions({
+        data: data.data || [],
+        summary: data.summary,
+      });
     } catch (error) {
       console.error("Error fetching transactions:", error);
       toast({
@@ -107,8 +110,17 @@ const SupplierReport = () => {
     }
   };
 
+  const getClosingBalance = () => {
+    if (transactions.summary?.closingBalance !== undefined) {
+      return transactions.summary.closingBalance;
+    }
+    return transactions.data.reduce((sum, item) => sum + item.debit - item.credit, 0);
+  };
+
+  const getOpeningBalance = () => transactions.summary?.openingBalance ?? 0;
+
   const exportToCSV = () => {
-    const headers = ["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit"];
+    const headers = ["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit", "Balance"];
     const csvContent = [
       headers.join(","),
       ...transactions.data.map((item) => {
@@ -118,7 +130,8 @@ const SupplierReport = () => {
           `"${item.particulars}"`,
           `"${item.voucherNo}"`,
           formatAmount(item.debit),
-          formatAmount(item.credit)
+          formatAmount(item.credit),
+          formatAmount(item.balance ?? 0),
         ].join(",");
       }),
     ].join("\n");
@@ -162,9 +175,10 @@ const SupplierReport = () => {
     doc.text(`Period: ${format(new Date(startDate), 'dd/MM/yyyy')} to ${format(new Date(endDate), 'dd/MM/yyyy')}`, margin, 42);
 
     // Add summary section
-    const totalDebit = transactions.data.reduce((sum, item) => sum + item.debit, 0);
-    const totalCredit = transactions.data.reduce((sum, item) => sum + item.credit, 0);
-    const balance = totalDebit - totalCredit;
+    const totalDebit = transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0);
+    const totalCredit = transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0);
+    const openingBalance = getOpeningBalance();
+    const balance = getClosingBalance();
 
     // Format amounts without currency symbol for PDF
     const formatAmountForPDF = (amount: number) => {
@@ -177,22 +191,24 @@ const SupplierReport = () => {
     doc.setFont("helvetica", "bold");
     doc.text("Summary", margin, 52);
     doc.setFont("helvetica", "normal");
-    doc.text(`Total Debit: ₹${formatAmountForPDF(totalDebit)}`, margin, 59);
-    doc.text(`Total Credit: ₹${formatAmountForPDF(totalCredit)}`, margin, 66);
+    doc.text(`Opening Balance: ₹${formatAmountForPDF(openingBalance)}`, margin, 59);
+    doc.text(`Total Debit: ₹${formatAmountForPDF(totalDebit)}`, margin, 66);
+    doc.text(`Total Credit: ₹${formatAmountForPDF(totalCredit)}`, margin, 73);
     doc.setFont("helvetica", "bold");
-    doc.text(`Balance: ₹${formatAmountForPDF(balance)}`, margin, 73);
+    doc.text(`Closing Balance: ₹${formatAmountForPDF(balance)}`, margin, 80);
 
     // Add transactions table
     autoTable(doc, {
-      startY: 80,
-      head: [["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit"]],
+      startY: 87,
+      head: [["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit", "Balance"]],
       body: transactions.data.map((item) => [
         item.srno,
         format(new Date(item.date), "dd/MM/yyyy"),
         item.particulars,
         item.voucherNo,
         `₹${formatAmountForPDF(item.debit)}`,
-        `₹${formatAmountForPDF(item.credit)}`
+        `₹${formatAmountForPDF(item.credit)}`,
+        `₹${formatAmountForPDF(item.balance ?? 0)}`,
       ]),
       styles: {
         fontSize: 8,
@@ -220,7 +236,8 @@ const SupplierReport = () => {
         2: { cellWidth: 'auto', font: 'helvetica' },
         3: { cellWidth: 25, font: 'helvetica' },
         4: { cellWidth: 25, halign: 'right', font: 'helvetica' },
-        5: { cellWidth: 25, halign: 'right', font: 'helvetica' }
+        5: { cellWidth: 25, halign: 'right', font: 'helvetica' },
+        6: { cellWidth: 25, halign: 'right', font: 'helvetica' }
       },
       margin: { left: margin, right: margin },
       tableWidth: 'auto',
@@ -360,29 +377,33 @@ const SupplierReport = () => {
               <div className="sticky top-0 z-10 bg-background pb-4">
                 <div className="bg-sidebar/5 rounded-lg p-4 shadow-sm">
                   <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-muted-foreground">Opening Balance</span>
+                    <span className="font-medium">
+                      {formatAmount(getOpeningBalance())}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Total Debit</span>
                     <span className="font-medium">
-                      {formatAmount(transactions.data.reduce((sum, item) => sum + item.debit, 0))}
+                      {formatAmount(transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0))}
                     </span>
                   </div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Total Credit</span>
                     <span className="font-medium">
-                      {formatAmount(transactions.data.reduce((sum, item) => sum + item.credit, 0))}
+                      {formatAmount(transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0))}
                     </span>
                   </div>
                   <div className="border-t border-sidebar/20 my-2" />
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold">Balance</span>
+                    <span className="font-semibold">Closing Balance</span>
                     <span className={cn(
                       "font-bold text-lg",
-                      transactions.data.reduce((sum, item) => sum + item.debit - item.credit, 0) >= 0
+                      getClosingBalance() >= 0
                         ? "text-green-600"
                         : "text-red-600"
                     )}>
-                      {formatAmount(
-                        transactions.data.reduce((sum, item) => sum + item.debit - item.credit, 0)
-                      )}
+                      {formatAmount(getClosingBalance())}
                     </span>
                   </div>
                 </div>
@@ -398,35 +419,46 @@ const SupplierReport = () => {
                     <TableHead className="text-white">Particulars</TableHead>
                     <TableHead className="text-white">Voucher No.</TableHead>
                     <TableHead className="text-white">Debit</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Credit</TableHead>
+                    <TableHead className="text-white">Credit</TableHead>
+                    <TableHead className="text-white rounded-tr-lg">Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transactions.data.length > 0 ? (
                     <>
                       {transactions.data.map((item) => (
-                        <TableRow key={item.srno} className="hover:bg-sidebar/10">
+                        <TableRow
+                          key={item.srno}
+                          className={cn(
+                            "hover:bg-sidebar/10",
+                            (item.isOpeningBalance || item.isBroughtForward) && "bg-amber-50/50 font-medium"
+                          )}
+                        >
                           <TableCell>{item.srno}</TableCell>
                           <TableCell>{format(new Date(item.date), "yyyy-MM-dd")}</TableCell>
                           <TableCell>{item.particulars}</TableCell>
                           <TableCell>{item.voucherNo}</TableCell>
                           <TableCell className="text-right">{formatAmount(item.debit)}</TableCell>
                           <TableCell className="text-right">{formatAmount(item.credit)}</TableCell>
+                          <TableCell className="text-right">{formatAmount(item.balance ?? 0)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="border-t-2 border-sidebar/20">
                         <TableCell colSpan={4} className="text-right font-medium">Total</TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatAmount(transactions.data.reduce((sum, item) => sum + item.debit, 0))}
+                          {formatAmount(transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0))}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatAmount(transactions.data.reduce((sum, item) => sum + item.credit, 0))}
+                          {formatAmount(transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0))}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatAmount(getClosingBalance())}
                         </TableCell>
                       </TableRow>
                     </>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
+                      <TableCell colSpan={7} className="text-center py-8">
                         No data found
                       </TableCell>
                     </TableRow>

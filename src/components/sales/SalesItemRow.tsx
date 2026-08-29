@@ -21,6 +21,11 @@ interface SalesItemRowProps {
   removeItem: (index: number) => void;
   availableRolls: any[];
   defaultCustomRoll?: boolean;
+  setRef: (field: string, index: number) => (element: HTMLInputElement | null) => void;
+  createKeyDownHandler: (
+    index: number,
+    field: string
+  ) => (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
 }
 
 const SalesItemRow: React.FC<SalesItemRowProps> = ({
@@ -33,6 +38,8 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
   removeItem,
   availableRolls,
   defaultCustomRoll = true,
+  setRef,
+  createKeyDownHandler,
 }) => {
   const [isCustomRoll, setIsCustomRoll] = useState(() => {
     const isNewItem = !item.roll_no && !item.purchase_item_id;
@@ -119,6 +126,15 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
     handleItemChange(index, 'purchase_item_id', null);
   };
 
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    field: string
+  ) => {
+    createKeyDownHandler(index, field)(e);
+  };
+
+  const metersEditable = isCustomRoll || !item.roll_no;
+
   return (
     <tr>
       <td className="px-6 py-4 whitespace-nowrap">
@@ -165,11 +181,13 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
             <div className="flex flex-col space-y-1">
               <Input
                 type="text"
+                ref={setRef('roll_no', index)}
                 value={item.roll_no || ''}
                 onChange={(e) => {
                   const newValue = e.target.value;
                   handleCustomRollChange(newValue);
                 }}
+                onKeyDown={(e) => handleKeyDown(e, 'roll_no')}
                 placeholder="Enter custom roll no"
                 disabled={!item.product_id}
               />
@@ -206,26 +224,32 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
       <td className="px-6 py-4 whitespace-nowrap">
         <Input
           type="text"
+          ref={setRef('shade', index)}
           value={item.shade || ''}
           onChange={(e) => handleItemChange(index, 'shade', e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, 'shade')}
           placeholder="Shade"
         />
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <Input
           type="number"
+          ref={metersEditable ? setRef('meters', index) : undefined}
           value={item.meters || ''}
           onChange={(e) => handleItemChange(index, 'meters', parseFloat(e.target.value) || 0)}
+          onKeyDown={metersEditable ? (e) => handleKeyDown(e, 'meters') : undefined}
           placeholder="Meters"
-          readOnly={!isCustomRoll && item.roll_no} // Only readonly for stock rolls
-          className={!isCustomRoll && item.roll_no ? 'bg-gray-50' : ''}
+          readOnly={!metersEditable}
+          className={!metersEditable ? 'bg-gray-50' : ''}
         />
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <Input
           type="number"
+          ref={setRef('price', index)}
           value={item.price || ''}
           onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)}
+          onKeyDown={(e) => handleKeyDown(e, 'price')}
           placeholder="Price/Meter"
         />
       </td>

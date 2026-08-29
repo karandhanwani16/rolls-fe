@@ -43,6 +43,8 @@ type Supplier = {
   phone: string | null;
   description: string | null;
   city: string | null;
+  opening_balance: number;
+  opening_balance_date: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -53,7 +55,15 @@ const supplierFormSchema = z.object({
   phone: z.string().nullable(),
   description: z.string().nullable(),
   city: z.string().nullable(),
-});
+  opening_balance: z.coerce.number().default(0),
+  opening_balance_date: z.string().nullable(),
+}).refine(
+  (data) => data.opening_balance === 0 || (data.opening_balance_date && data.opening_balance_date.length > 0),
+  {
+    message: "Opening balance date is required when opening balance is set",
+    path: ["opening_balance_date"],
+  }
+);
 
 type SupplierFormValues = z.infer<typeof supplierFormSchema>;
 
@@ -75,6 +85,8 @@ const Suppliers = () => {
       phone: "",
       description: "",
       city: "",
+      opening_balance: 0,
+      opening_balance_date: "",
     },
   });
 
@@ -85,6 +97,8 @@ const Suppliers = () => {
       phone: "",
       description: "",
       city: "",
+      opening_balance: 0,
+      opening_balance_date: "",
     },
   });
 
@@ -101,6 +115,10 @@ const Suppliers = () => {
         phone: selectedSupplier.phone,
         description: selectedSupplier.description,
         city: selectedSupplier.city,
+        opening_balance: selectedSupplier.opening_balance ?? 0,
+        opening_balance_date: selectedSupplier.opening_balance_date
+          ? selectedSupplier.opening_balance_date.slice(0, 10)
+          : "",
       });
     }
   }, [selectedSupplier, isEditDialogOpen, editForm]);
@@ -154,6 +172,8 @@ const Suppliers = () => {
         supplier_phone: values.phone,
         supplier_description: values.description,
         supplier_city: values.city,
+        opening_balance: values.opening_balance,
+        opening_balance_date: values.opening_balance_date || null,
       };
       await suppliersAPI.create(backendData);
       toast({
@@ -190,6 +210,8 @@ const Suppliers = () => {
         supplier_phone: values.phone,
         supplier_description: values.description,
         supplier_city: values.city,
+        opening_balance: values.opening_balance,
+        opening_balance_date: values.opening_balance_date || null,
       };
       await suppliersAPI.update(selectedSupplier.id, backendData);
       toast({
@@ -274,6 +296,7 @@ const Suppliers = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>City</TableHead>
+                  <TableHead>Opening Balance</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -281,7 +304,7 @@ const Suppliers = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       Loading suppliers...
                     </TableCell>
                   </TableRow>
@@ -309,6 +332,26 @@ const Suppliers = () => {
                           </div>
                         ) : (
                           "N/A"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {supplier.opening_balance ? (
+                          <div className="text-sm">
+                            <div>
+                              {new Intl.NumberFormat('en-IN', {
+                                style: 'currency',
+                                currency: 'INR',
+                                maximumFractionDigits: 0,
+                              }).format(supplier.opening_balance)}
+                            </div>
+                            {supplier.opening_balance_date && (
+                              <div className="text-xs text-muted-foreground">
+                                as on {supplier.opening_balance_date.slice(0, 10)}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          "—"
                         )}
                       </TableCell>
                       <TableCell className="max-w-xs truncate">
@@ -344,7 +387,7 @@ const Suppliers = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       No suppliers found.
                     </TableCell>
                   </TableRow>
@@ -396,6 +439,41 @@ const Suppliers = () => {
                     <FormLabel>City</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Enter city" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="opening_balance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opening Balance (₹)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...field}
+                        placeholder="0"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="opening_balance_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opening Balance Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={field.value || ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -484,6 +562,41 @@ const Suppliers = () => {
                     <FormLabel>City</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Enter city" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="opening_balance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opening Balance (₹)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...field}
+                        placeholder="0"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="opening_balance_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opening Balance Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={field.value || ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

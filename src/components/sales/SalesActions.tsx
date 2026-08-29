@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { IndianRupee } from 'lucide-react';
+import { useFormSectionNavigation } from '@/lib/formKeyboardNavigation';
 
 interface SalesActionsProps {
     formData: any;
@@ -20,6 +21,7 @@ const SalesActions = ({
     formData,
     setFormData,
 }: SalesActionsProps) => {
+    const { containerRef, onKeyDownCapture } = useFormSectionNavigation();
     const itemsTotal = (formData.items || []).reduce(
         (sum: number, item: any) => sum + (item.total_price || 0),
         0
@@ -42,7 +44,7 @@ const SalesActions = ({
                     Total Amount
                 </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent ref={containerRef} onKeyDownCapture={onKeyDownCapture}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="items_total">Items Total (₹)</Label>

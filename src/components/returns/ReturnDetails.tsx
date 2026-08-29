@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "lucide-react";
 import SearchableSelect from "@/components/ui/searchable-select";
+import { useFormSectionNavigation } from "@/lib/formKeyboardNavigation";
 
 interface ReturnDetailsProps {
   mode: "sales" | "purchase";
@@ -26,6 +27,8 @@ const ReturnDetails = ({
   onPartyChange,
   onBillChange,
 }: ReturnDetailsProps) => {
+  const { containerRef, onKeyDownCapture } = useFormSectionNavigation();
+
   const handleChange = (field: string, value: any) => {
     setFormData((prev: any) => ({
       ...prev,
@@ -45,7 +48,11 @@ const ReturnDetails = ({
           {isSales ? "Sales Return Details" : "Purchase Return Details"}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent
+        ref={containerRef}
+        onKeyDownCapture={onKeyDownCapture}
+        className="space-y-6"
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label htmlFor="return_no">Return No</Label>

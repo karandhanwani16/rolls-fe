@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Package, Plus, X } from "lucide-react";
+import { useCallback } from "react";
+import { useTableInputNavigation } from "@/lib/formKeyboardNavigation";
 
 interface ReturnItemsProps {
   mode: "sales" | "purchase";
@@ -32,6 +34,20 @@ const ReturnItems = ({
 }: ReturnItemsProps) => {
   const isPurchase = mode === "purchase";
   const hasBill = isPurchase ? formData.purchase_id : formData.sale_id;
+
+  const getFieldsForRow = useCallback(
+    (rowIndex: number) => {
+      const item = formData.items[rowIndex];
+      return item?.is_custom ? ["roll_no", "meters", "price"] : ["meters", "price"];
+    },
+    [formData.items]
+  );
+
+  const { setRef, createKeyDownHandler } = useTableInputNavigation({
+    fields: ["roll_no", "meters", "price"],
+    rowCount: formData.items.length,
+    getFieldsForRow,
+  });
 
   return (
     <div className="space-y-4">
@@ -128,10 +144,12 @@ const ReturnItems = ({
                           <div className="space-y-1">
                             <Input
                               type="text"
+                              ref={setRef("roll_no", index)}
                               value={item.roll_no || ""}
                               onChange={(e) =>
                                 handleItemChange(index, "roll_no", e.target.value)
                               }
+                              onKeyDown={createKeyDownHandler(index, "roll_no")}
                               placeholder="Custom roll no"
                               disabled={!item.product_id}
                             />
@@ -151,6 +169,7 @@ const ReturnItems = ({
                           type="number"
                           min="0"
                           step="0.01"
+                          ref={setRef("meters", index)}
                           value={item.meters ?? 0}
                           onChange={(e) =>
                             handleItemChange(
@@ -159,6 +178,7 @@ const ReturnItems = ({
                               parseFloat(e.target.value) || 0
                             )
                           }
+                          onKeyDown={createKeyDownHandler(index, "meters")}
                           placeholder="0"
                         />
                       </td>
@@ -167,6 +187,7 @@ const ReturnItems = ({
                           type="number"
                           min="0"
                           step="0.01"
+                          ref={setRef("price", index)}
                           value={item.price ?? 0}
                           onChange={(e) =>
                             handleItemChange(
@@ -175,6 +196,7 @@ const ReturnItems = ({
                               parseFloat(e.target.value) || 0
                             )
                           }
+                          onKeyDown={createKeyDownHandler(index, "price")}
                         />
                       </td>
                       <td className="px-4 py-3">

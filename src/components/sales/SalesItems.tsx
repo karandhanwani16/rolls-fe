@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Package } from 'lucide-react';
 import SalesItemRow from './SalesItemRow';
 import BulkProductAdder from './BulkProductAdder';
+import { useTableInputNavigation } from '@/lib/formKeyboardNavigation';
 
 interface SalesItemsProps {
     formData: any;
@@ -33,6 +34,12 @@ const SalesItems = ({
     title = "Sale Items",
     defaultCustomRoll = true,
 }: SalesItemsProps) => {
+    const { setRef, createKeyDownHandler } = useTableInputNavigation({
+        fields: ['roll_no', 'shade', 'meters', 'price'],
+        rowCount: formData.items.length,
+        onAddRow: addItem,
+    });
+
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -101,6 +108,8 @@ const SalesItems = ({
                                         removeItem={removeItem}
                                         availableRolls={getAvailableRolls(item.product_id, index)}
                                         defaultCustomRoll={defaultCustomRoll}
+                                        setRef={setRef}
+                                        createKeyDownHandler={createKeyDownHandler}
                                     />
                                 ))}
                             </tbody>
@@ -112,4 +121,4 @@ const SalesItems = ({
     );
 };
 
-export default SalesItems; 
+export default SalesItems;

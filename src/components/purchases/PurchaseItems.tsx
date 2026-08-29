@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Package } from 'lucide-react';
 import PurchaseItemRow from './PurchaseItemRow';
 import BulkProductAdder from './BulkProductAdder';
-import { useRef, useCallback } from 'react';
+import { useTableInputNavigation } from '@/lib/formKeyboardNavigation';
 
 interface PurchaseItemsProps {
     formData: any;
@@ -16,6 +16,8 @@ interface PurchaseItemsProps {
     handleBulkAdd: (productId: string, count: number) => void;
 }
 
+const ITEM_FIELDS = ['roll_no', 'meters', 'price'];
+
 const PurchaseItems = ({
     formData,
     setFormData,
@@ -26,50 +28,11 @@ const PurchaseItems = ({
     removeItem,
     handleBulkAdd,
 }: PurchaseItemsProps) => {
-    const inputRefs = useRef<{ [key: string]: (HTMLInputElement | null)[] }>({
-        roll_no: [],
-        meters: [],
-        price: []
+    const { setRef, createKeyDownHandler } = useTableInputNavigation({
+        fields: ITEM_FIELDS,
+        rowCount: formData.items.length,
+        onAddRow: addItem,
     });
-
-    const setRef = useCallback((field: string, index: number) => (element: HTMLInputElement | null) => {
-        if (!inputRefs.current[field]) {
-            inputRefs.current[field] = [];
-        }
-        inputRefs.current[field][index] = element;
-    }, []);
-
-    const focusNextField = (currentIndex: number, currentField: string) => {
-        const fields = ['roll_no', 'meters', 'price'];
-        const currentFieldIndex = fields.indexOf(currentField);
-        
-        if (currentFieldIndex < fields.length - 1) {
-            // Move to next field in same row
-            inputRefs.current[fields[currentFieldIndex + 1]]?.[currentIndex]?.focus();
-        } else if (currentIndex < formData.items.length - 1) {
-            // Move to first field in next row
-            inputRefs.current[fields[0]]?.[currentIndex + 1]?.focus();
-        } else {
-            // If we're at the last field of the last row, add a new row and focus its first field
-            addItem();
-            setTimeout(() => {
-                inputRefs.current[fields[0]]?.[currentIndex + 1]?.focus();
-            }, 0);
-        }
-    };
-
-    const focusPreviousField = (currentIndex: number, currentField: string) => {
-        const fields = ['roll_no', 'meters', 'price'];
-        const currentFieldIndex = fields.indexOf(currentField);
-        
-        if (currentFieldIndex > 0) {
-            // Move to previous field in same row
-            inputRefs.current[fields[currentFieldIndex - 1]]?.[currentIndex]?.focus();
-        } else if (currentIndex > 0) {
-            // Move to last field in previous row
-            inputRefs.current[fields[fields.length - 1]]?.[currentIndex - 1]?.focus();
-        }
-    };
 
     return (
         <div className="space-y-4">
@@ -135,9 +98,8 @@ const PurchaseItems = ({
                                         handleItemChange={handleItemChange}
                                         handleProductChange={handleProductChange}
                                         removeItem={removeItem}
-                                        onFocusNext={(field) => focusNextField(index, field)}
-                                        onFocusPrevious={(field) => focusPreviousField(index, field)}
-                                        ref={setRef('roll_no', index)}
+                                        setRef={setRef}
+                                        createKeyDownHandler={createKeyDownHandler}
                                     />
                                 ))}
                             </tbody>
@@ -149,4 +111,4 @@ const PurchaseItems = ({
     );
 };
 
-export default PurchaseItems; 
+export default PurchaseItems;
