@@ -72,7 +72,7 @@ class PdfService {
       }
 
       // Invoice items table
-      const tableColumn = ["S.No", "Product", "Roll No.", "Shade", "Meters", "Price", "Total"];
+      const tableColumn = ["S.No", "Product", "Roll No.", "Shade", "Qty", "Price", "Total"];
       const tableRows: any[] = [];
 
       // Add items to table
@@ -82,7 +82,7 @@ class PdfService {
           item.product_name || '-',
           item.roll_no || '-',
           item.shade || '-',
-          item.meters.toFixed(2),
+          `${item.meters.toFixed(2)} ${item.unit || 'm'}`,
           item.price.toFixed(2),
           (item.total ?? item.total_price).toFixed(2)
         ];

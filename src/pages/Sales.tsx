@@ -301,7 +301,7 @@ const Sales = () => {
                         <TableHead>Product</TableHead>
                         <TableHead>Roll No</TableHead>
                         <TableHead>Shade</TableHead>
-                        <TableHead className="text-right">Meters</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
                         <TableHead className="text-right">Price</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                       </TableRow>
@@ -314,7 +314,7 @@ const Sales = () => {
                             <TableCell>{item.roll_no || "-"}</TableCell>
                             <TableCell>{item.shade || "-"}</TableCell>
                             <TableCell className="text-right">
-                              {item.meters.toFixed(2)}
+                              {item.meters.toFixed(2)} {item.unit || "m"}
                             </TableCell>
                             <TableCell className="text-right">
                               ₹{item.price.toFixed(2)}

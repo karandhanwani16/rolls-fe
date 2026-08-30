@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import QuantityUnitSelect from '@/components/ui/quantity-unit-select';
+import { DEFAULT_QUANTITY_UNIT, getUnitMeta } from '@/lib/quantityUnits';
 
 interface SalesItemRowProps {
   item: any;
@@ -208,7 +210,7 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
                 {availableRolls && availableRolls.length > 0 ? (
                   availableRolls.map((roll: any) => (
                     <SelectItem key={roll.roll_no} value={roll.roll_no}>
-                      {roll.roll_no} - {roll.meters}m @ ₹{roll.price}
+                      {roll.roll_no} - {roll.meters}{getUnitMeta(roll.unit).abbr} @ ₹{roll.price}
                     </SelectItem>
                   ))
                 ) : (
@@ -232,16 +234,23 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
         />
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <Input
-          type="number"
-          ref={metersEditable ? setRef('meters', index) : undefined}
-          value={item.meters || ''}
-          onChange={(e) => handleItemChange(index, 'meters', parseFloat(e.target.value) || 0)}
-          onKeyDown={metersEditable ? (e) => handleKeyDown(e, 'meters') : undefined}
-          placeholder="Meters"
-          readOnly={!metersEditable}
-          className={!metersEditable ? 'bg-gray-50' : ''}
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            ref={metersEditable ? setRef('meters', index) : undefined}
+            value={item.meters || ''}
+            onChange={(e) => handleItemChange(index, 'meters', parseFloat(e.target.value) || 0)}
+            onKeyDown={metersEditable ? (e) => handleKeyDown(e, 'meters') : undefined}
+            placeholder="Qty"
+            readOnly={!metersEditable}
+            className={!metersEditable ? 'bg-gray-50 min-w-[90px]' : 'min-w-[90px]'}
+          />
+          <QuantityUnitSelect
+            value={item.unit || DEFAULT_QUANTITY_UNIT}
+            onChange={(unit) => handleItemChange(index, 'unit', unit)}
+            disabled={!metersEditable}
+          />
+        </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <Input

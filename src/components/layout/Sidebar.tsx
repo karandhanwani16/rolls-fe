@@ -249,12 +249,11 @@ const Sidebar = () => {
     { label: "Stock Report", to: "/reports/stock" },
     { label: "Customer Report", to: "/reports/customers" },
     { label: "Supplier Report", to: "/reports/suppliers" },
+    { label: "Watav Report", to: "/reports/watav" },
     { label: "Sales Report", to: "/reports/sales" },
     { label: "Purchase Report", to: "/reports/purchases" },
     { label: "Sales Return Report", to: "/reports/sales-returns" },
     { label: "Purchase Return Report", to: "/reports/purchase-returns" },
-    // { label: "Payment In Report", to: "/reports/payments-in" },
-    // { label: "Payment Out Report", to: "/reports/payments-out" },
   ];
 
   const sidebarHeader = (

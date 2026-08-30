@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Package, Plus, X } from "lucide-react";
 import { useCallback } from "react";
 import { useTableInputNavigation } from "@/lib/formKeyboardNavigation";
+import QuantityUnitSelect from "@/components/ui/quantity-unit-select";
+import { DEFAULT_QUANTITY_UNIT, formatQuantity } from "@/lib/quantityUnits";
 
 interface ReturnItemsProps {
   mode: "sales" | "purchase";
@@ -34,6 +36,8 @@ const ReturnItems = ({
 }: ReturnItemsProps) => {
   const isPurchase = mode === "purchase";
   const hasBill = isPurchase ? formData.purchase_id : formData.sale_id;
+  const hasParty = isPurchase ? formData.supplier_id : formData.customer_id;
+  const canAddCustom = isPurchase && Boolean(hasParty);
 
   const getFieldsForRow = useCallback(
     (rowIndex: number) => {
@@ -49,6 +53,21 @@ const ReturnItems = ({
     getFieldsForRow,
   });
 
+  const emptyMessage = () => {
+    if (!hasParty) {
+      return isPurchase
+        ? "Select a supplier to add returned rolls"
+        : "Select a customer and sales bill to load rolls";
+    }
+    if (isPurchase && !hasBill) {
+      return "Add custom rolls to return, or select a purchase bill to load its rolls";
+    }
+    if (hasBill) {
+      return "This bill has no rolls";
+    }
+    return `Select a ${isPurchase ? "supplier and purchase bill" : "customer and sales bill"} to load rolls`;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -56,7 +75,7 @@ const ReturnItems = ({
           <Package className="h-5 w-5 text-brand-teal" />
           Returned Rolls
         </h2>
-        {isPurchase && hasBill && addCustomItem && (
+        {canAddCustom && addCustomItem && (
           <Button
             type="button"
             onClick={addCustomItem}
@@ -73,11 +92,18 @@ const ReturnItems = ({
         <Card className="shadow-sm border-dashed border-gray-300">
           <CardContent className="flex flex-col justify-center items-center p-12 text-gray-500">
             <Package className="h-12 w-12 text-gray-300 mb-3" />
-            <p>
-              {hasBill
-                ? "This bill has no rolls"
-                : `Select a ${isPurchase ? "supplier and purchase bill" : "customer and sales bill"} to load rolls`}
-            </p>
+            <p className="text-center max-w-md">{emptyMessage()}</p>
+            {canAddCustom && addCustomItem && (
+              <Button
+                type="button"
+                onClick={addCustomItem}
+                variant="outline"
+                size="sm"
+                className="mt-4 border-brand-teal text-brand-teal hover:bg-teal-50"
+              >
+                <Plus className="h-4 w-4 mr-2" /> Add Custom Roll
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -93,10 +119,10 @@ const ReturnItems = ({
                     Roll No
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Bill Meters
+                    Bill Qty
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Returned Meters
+                    Returned Qty
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Price/Meter
@@ -162,25 +188,34 @@ const ReturnItems = ({
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-500">
-                        {isCustom ? "—" : Number(item.original_meters || 0).toFixed(2)}
+                        {isCustom
+                          ? "—"
+                          : formatQuantity(item.original_meters || 0, item.unit)}
                       </td>
                       <td className="px-4 py-3">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          ref={setRef("meters", index)}
-                          value={item.meters ?? 0}
-                          onChange={(e) =>
-                            handleItemChange(
-                              index,
-                              "meters",
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                          onKeyDown={createKeyDownHandler(index, "meters")}
-                          placeholder="0"
-                        />
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            ref={setRef("meters", index)}
+                            value={item.meters ?? 0}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "meters",
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            onKeyDown={createKeyDownHandler(index, "meters")}
+                            placeholder="0"
+                            className="min-w-[90px]"
+                          />
+                          <QuantityUnitSelect
+                            value={item.unit || DEFAULT_QUANTITY_UNIT}
+                            onChange={(unit) => handleItemChange(index, "unit", unit)}
+                          />
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <Input

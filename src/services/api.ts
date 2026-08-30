@@ -328,6 +328,16 @@ export const paymentsInAPI = {
     const response = await api.get('/payments-in');
     return response.data;
   },
+  getWatavReport: async ({ startDate, endDate, watavCustomerId }: { startDate: string, endDate: string, watavCustomerId?: string }) => {
+    const response = await api.get('/payments-in/watav-report', {
+      params: {
+        startDate,
+        endDate,
+        ...(watavCustomerId ? { watavCustomerId } : {}),
+      },
+    });
+    return response.data;
+  },
   create: async (data: any) => {
     const response = await api.post('/payments-in', data);
     return response.data;

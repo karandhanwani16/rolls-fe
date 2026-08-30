@@ -92,7 +92,14 @@ const ReturnDetails = ({
           </div>
 
           <div className="space-y-2">
-            <Label>{isSales ? "Sales Bill" : "Purchase Bill"}</Label>
+            <Label>
+              {isSales ? "Sales Bill" : "Purchase Bill"}
+              {!isSales && (
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              )}
+            </Label>
             <SearchableSelect
               options={bills}
               value={billId}
@@ -106,11 +113,15 @@ const ReturnDetails = ({
                     ? "Loading bills..."
                     : isSales
                       ? "Search sales bills"
-                      : "Search purchase bills"
+                      : "Search purchase bills (optional)"
               }
               searchPlaceholder="Search bills..."
               emptyText={
-                partyId ? "No bills found for this party" : "Select a party first"
+                partyId
+                  ? isSales
+                    ? "No bills found for this party"
+                    : "No purchase bills found — you can still add custom rolls"
+                  : "Select a party first"
               }
               disabled={!partyId || billsLoading}
             />

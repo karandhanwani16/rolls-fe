@@ -16,6 +16,7 @@ import SalesDetails from "./SalesDetails";
 import SalesItems from "./SalesItems";
 import SalesActions from "./SalesActions";
 import { downloadSalePdf } from "@/lib/downloadSalePdf";
+import { DEFAULT_QUANTITY_UNIT } from "@/lib/quantityUnits";
 
 interface SalesItem {
   sales_item_id: string;
@@ -27,6 +28,7 @@ interface SalesItem {
   roll_id: string;
   purchase_item_id?: string;
   meters: number;
+  unit?: string;
   price: number;
   total_price: number;
   created_at: string;
@@ -35,6 +37,7 @@ interface SalesItem {
     id: string;
     roll_no: string;
     meters: number;
+    unit?: string;
     price: number;
   }>;
 }
@@ -191,6 +194,7 @@ const SalesForm = () => {
                   id: item.roll_id,
                   roll_no: item.roll_no,
                   meters: item.meters,
+                  unit: item.unit || DEFAULT_QUANTITY_UNIT,
                   price: item.price,
                 };
                 availableRolls.push(rollToAdd);
@@ -434,6 +438,7 @@ const SalesForm = () => {
         roll_id: selectedRoll.id,
         purchase_item_id: selectedRoll.id,
         meters: selectedRoll.meters,
+        unit: selectedRoll.unit || DEFAULT_QUANTITY_UNIT,
         price: selectedRoll.price,
         total_price: parseFloat(
           (selectedRoll.meters * selectedRoll.price).toFixed(2)
@@ -469,6 +474,7 @@ const SalesForm = () => {
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
+          unit: DEFAULT_QUANTITY_UNIT,
           price: 0,
           total_price: 0,
           created_at: "",
@@ -490,6 +496,7 @@ const SalesForm = () => {
         id: itemToRemove.roll_id,
         roll_no: itemToRemove.roll_no,
         meters: itemToRemove.meters,
+        unit: itemToRemove.unit || DEFAULT_QUANTITY_UNIT,
         price: itemToRemove.price,
       };
 
@@ -548,6 +555,7 @@ const SalesForm = () => {
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
+          unit: DEFAULT_QUANTITY_UNIT,
           price: product.price || 0,
           total_price: 0,
           created_at: "",

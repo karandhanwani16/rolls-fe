@@ -67,6 +67,7 @@ interface StockItem {
   product_name: string;
   roll_no: string;
   meters: number;
+  unit?: string;
   price: number;
   godown: string;
 }
@@ -157,7 +158,7 @@ const StockReport = () => {
                   <th>Sr. No.</th>
                   <th>Product Name</th>
                   <th>Roll No.</th>
-                  <th>Meters</th>
+                  <th>Quantity</th>
                   <th>Godown</th>
                 </tr>
               </thead>
@@ -167,7 +168,7 @@ const StockReport = () => {
                     <td>${index + 1}</td>
                     <td>${item.product_name}</td>
                     <td>${item.roll_no}</td>
-                    <td>${item.meters}</td>
+                    <td>${item.meters} ${item.unit || 'm'}</td>
                     <td>${item.godown}</td>
                   </tr>
                 `).join('')}
@@ -331,7 +332,7 @@ const StockReport = () => {
                     <TableHead className="text-white rounded-tl-lg rounded-bl-lg">Sr. No.</TableHead>
                     <TableHead className="text-white">Product Name</TableHead>
                     <TableHead className="text-white">Roll No.</TableHead>
-                    <TableHead className="text-white">Meters</TableHead>
+                    <TableHead className="text-white">Quantity</TableHead>
                     <TableHead className="text-white rounded-tr-lg rounded-br-lg">Godown</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -341,7 +342,7 @@ const StockReport = () => {
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>{item.product_name}</TableCell>
                       <TableCell>{item.roll_no}</TableCell>
-                      <TableCell>{item.meters}</TableCell>
+                      <TableCell>{item.meters} {item.unit || "m"}</TableCell>
                       <TableCell>{item.godown}</TableCell>
                     </TableRow>
                   ))}

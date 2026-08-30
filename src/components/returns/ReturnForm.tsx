@@ -18,6 +18,7 @@ import { ArrowLeft, Save } from "lucide-react";
 import ReturnDetails from "./ReturnDetails";
 import ReturnItems from "./ReturnItems";
 import SalesActions from "@/components/sales/SalesActions";
+import { DEFAULT_QUANTITY_UNIT } from "@/lib/quantityUnits";
 
 interface ReturnFormProps {
   mode: "sales" | "purchase";
@@ -50,6 +51,7 @@ const mapBillRolls = (
       purchase_item_id: purchaseItemId,
       original_meters: Number(item.meters) || 0,
       meters,
+      unit: saved?.unit || item.unit || DEFAULT_QUANTITY_UNIT,
       price,
       total_price: parseFloat((meters * price).toFixed(2)),
       is_custom: false,
@@ -76,6 +78,7 @@ const extraCustomItems = (billItems: any[], savedItems: any[], isPurchase: boole
       purchase_item_id: null,
       original_meters: 0,
       meters: Number(item.meters) || 0,
+      unit: item.unit || DEFAULT_QUANTITY_UNIT,
       price: Number(item.price) || 0,
       total_price: parseFloat(
         ((Number(item.meters) || 0) * (Number(item.price) || 0)).toFixed(2)
@@ -273,6 +276,7 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
   };
 
   const handleBillChange = async (billId: string) => {
+    const existingCustomItems = formData.items.filter((item: any) => item.is_custom);
     const fromList = bills.find((bill) => bill.id === billId);
     const bill =
       fromList?.items
@@ -282,7 +286,7 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
             ? await salesAPI.getById(billId)
             : await purchasesAPI.getById(billId)
           : null;
-    const items = applyBillItems(bill);
+    const items = applyBillItems(bill, [], existingCustomItems);
     setFormData((prev: any) => ({
       ...prev,
       sale_id: isSales ? billId : "",
@@ -300,12 +304,31 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
       toast.error(`Select a ${isSales ? "customer" : "supplier"}`);
       return;
     }
-    if (!billId) {
-      toast.error(`Select a ${isSales ? "sales" : "purchase"} bill`);
+    // Sales return still requires a bill. Purchase return can be custom-only (no bill).
+    if (isSales && !billId) {
+      toast.error("Select a sales bill");
       return;
     }
     if (!formData.items.some((item: any) => Number(item.meters) > 0)) {
-      toast.error("Enter returned meters for at least one roll");
+      toast.error("Enter returned quantity for at least one roll");
+      return;
+    }
+    if (
+      !isSales &&
+      !billId &&
+      !formData.items.some((item: any) => item.is_custom && Number(item.meters) > 0)
+    ) {
+      toast.error("Add custom rolls or select a purchase bill");
+      return;
+    }
+    const invalidCustom = formData.items.find(
+      (item: any) =>
+        item.is_custom &&
+        Number(item.meters) > 0 &&
+        (!item.product_id || !String(item.roll_no || "").trim())
+    );
+    if (invalidCustom) {
+      toast.error("Custom rolls need a product and roll number");
       return;
     }
     mutation.mutate(formData);
@@ -364,6 +387,7 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
           purchase_item_id: null,
           original_meters: 0,
           meters: 0,
+          unit: DEFAULT_QUANTITY_UNIT,
           price: 0,
           total_price: 0,
           is_custom: true,

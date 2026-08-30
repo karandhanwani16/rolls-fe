@@ -15,6 +15,7 @@ import PurchaseDetails from "./PurchaseDetails";
 import PurchaseItems from "./PurchaseItems";
 import PurchaseActions from "./PurchaseActions";
 import BulkProductAdder from "./BulkProductAdder";
+import { DEFAULT_QUANTITY_UNIT, formatUnitTotals, sumQuantityByUnit } from "@/lib/quantityUnits";
 
 interface PurchaseItem {
   purchase_item_id: string;
@@ -23,6 +24,7 @@ interface PurchaseItem {
   product_name: string;
   roll_no: string;
   meters: number;
+  unit?: string;
   price: number;
   total_price: number;
   created_at: string;
@@ -245,6 +247,7 @@ const PurchaseForm = () => {
           product_name: "",
           roll_no: "",
           meters: 0,
+          unit: DEFAULT_QUANTITY_UNIT,
           price: 0,
           total_price: 0,
           created_at: "",
@@ -277,6 +280,7 @@ const PurchaseForm = () => {
         product_name: product.name,
         roll_no: "",
         meters: 0,
+        unit: DEFAULT_QUANTITY_UNIT,
         price: product.price || 0,
         total_price: 0,
         created_at: "",
@@ -297,19 +301,22 @@ const PurchaseForm = () => {
   const getGroupedMeters = () => {
     const groupMap = new Map<
       string,
-      { product_name: string; total_meters: number }
+      { product_name: string; totals: ReturnType<typeof sumQuantityByUnit> }
     >();
 
     formData.items.forEach((item) => {
       const key = item.product_id;
       const current = groupMap.get(key);
+      const itemTotals = sumQuantityByUnit([item]);
 
       if (current) {
-        current.total_meters += item.meters;
+        current.totals.m += itemTotals.m;
+        current.totals.yd += itemTotals.yd;
+        current.totals.kg += itemTotals.kg;
       } else {
         groupMap.set(key, {
           product_name: item.product_name,
-          total_meters: item.meters,
+          totals: itemTotals,
         });
       }
     });
@@ -377,24 +384,20 @@ const PurchaseForm = () => {
         <div className="flex justify-end items-center gap-4 text-lg font-semibold">
           <div className="mt-6 border-t pt-4">
             <h3 className="text-lg font-semibold text-gray-800">
-              Total Meters by Product
+              Total Quantity by Product
             </h3>
             <ul className="text-sm text-gray-700 space-y-1">
               {getGroupedMeters().map((group, idx) => (
                 <li key={idx}>
-                  {group.product_name}:{" "}
-                  {group.total_meters.toFixed(2)} meters
+                  {group.product_name}: {formatUnitTotals(group.totals)}
                 </li>
               ))}
             </ul>
             <h3 className="text-lg font-semibold text-gray-800 mt-4">
-              Total Meters
+              Total Quantity
             </h3>
             <p className="text-sm text-gray-700">
-              {getGroupedMeters()
-                .reduce((sum, group) => sum + group.total_meters, 0)
-                .toFixed(2)}{" "}
-              meters
+              {formatUnitTotals(sumQuantityByUnit(formData.items))}
             </p>
           </div>
         </div>

@@ -9,6 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import QuantityUnitSelect from "@/components/ui/quantity-unit-select";
+import { DEFAULT_QUANTITY_UNIT } from "@/lib/quantityUnits";
 
 interface PurchaseItemRowProps {
   item: any;
@@ -136,19 +138,25 @@ const PurchaseItemRow = ({
           />
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
-          <Input
-            ref={setRef("meters", index)}
-            type="text"
-            inputMode="decimal"
-            value={metersInput}
-            onChange={(e) => handleNumericChange(e.target.value, "meters")}
-            onBlur={() => handleNumericBlur("meters")}
-            onFocus={() => handleNumericFocus("meters")}
-            onKeyDown={(e) => handleKeyDown(e, "meters")}
-            placeholder="0.00"
-            className="focus-visible:ring-brand-teal"
-            required
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              ref={setRef("meters", index)}
+              type="text"
+              inputMode="decimal"
+              value={metersInput}
+              onChange={(e) => handleNumericChange(e.target.value, "meters")}
+              onBlur={() => handleNumericBlur("meters")}
+              onFocus={() => handleNumericFocus("meters")}
+              onKeyDown={(e) => handleKeyDown(e, "meters")}
+              placeholder="0.00"
+              className="focus-visible:ring-brand-teal min-w-[90px]"
+              required
+            />
+            <QuantityUnitSelect
+              value={item.unit || DEFAULT_QUANTITY_UNIT}
+              onChange={(unit) => handleItemChange(index, "unit", unit)}
+            />
+          </div>
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
           <Input

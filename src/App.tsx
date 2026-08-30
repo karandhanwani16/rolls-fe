@@ -38,6 +38,7 @@ import PurchaseReturns from "./pages/PurchaseReturns";
 import ReturnForm from "./components/returns/ReturnForm";
 import SalesReturnReport from "./pages/reports/SalesReturnReport";
 import PurchaseReturnReport from "./pages/reports/PurchaseReturnReport";
+import WatavReport from "./pages/reports/WatavReport";
 
 const queryClient = new QueryClient();
 
@@ -246,6 +247,11 @@ const AppContent = () => {
           <Route path="/reports/purchase-returns" element={
             <ProtectedRoute>
               <PurchaseReturnReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/watav" element={
+            <ProtectedRoute>
+              <WatavReport />
             </ProtectedRoute>
           } />
 
