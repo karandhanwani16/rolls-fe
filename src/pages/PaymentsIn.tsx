@@ -36,8 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreditCard, Plus, Search, Edit, Trash2 } from "lucide-react";
 import { paymentsInAPI, customersAPI } from "@/services/api";
 import { z } from "zod";
@@ -539,20 +538,20 @@ function PaymentFormDialog({
                   <FormItem>
                     <FormLabel>Payment Type</FormLabel>
                     <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
+                      <Tabs
                         value={field.value}
-                        className="flex flex-wrap gap-4"
+                        onValueChange={field.onChange}
+                        className="w-full"
                       >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="NORMAL" id={`${title}-normal`} />
-                          <Label htmlFor={`${title}-normal`}>Normal Payment</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="VATAV" id={`${title}-vatav`} />
-                          <Label htmlFor={`${title}-vatav`}>Watav</Label>
-                        </div>
-                      </RadioGroup>
+                        <TabsList className="grid w-full grid-cols-2 h-11">
+                          <TabsTrigger value="NORMAL" className="text-sm">
+                            Normal Payment
+                          </TabsTrigger>
+                          <TabsTrigger value="VATAV" className="text-sm">
+                            Watav
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -567,25 +566,25 @@ function PaymentFormDialog({
                     <FormItem>
                       <FormLabel>Watav Entry Type</FormLabel>
                       <FormControl>
-                        <RadioGroup
+                        <Tabs
+                          value={field.value || "CUSTOMER_PAYMENT"}
                           onValueChange={(v) => {
                             field.onChange(v);
                             if (v === "STANDALONE") {
                               form.setValue("actual_id", "");
                             }
                           }}
-                          value={field.value || "CUSTOMER_PAYMENT"}
-                          className="flex flex-wrap gap-4"
+                          className="w-full"
                         >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="CUSTOMER_PAYMENT" id={`${title}-cust`} />
-                            <Label htmlFor={`${title}-cust`}>Customer Payment</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="STANDALONE" id={`${title}-stand`} />
-                            <Label htmlFor={`${title}-stand`}>Standalone Vendor Entry</Label>
-                          </div>
-                        </RadioGroup>
+                          <TabsList className="grid w-full grid-cols-2 h-11">
+                            <TabsTrigger value="CUSTOMER_PAYMENT" className="text-sm">
+                              Customer Payment
+                            </TabsTrigger>
+                            <TabsTrigger value="STANDALONE" className="text-sm">
+                              Standalone Vendor Entry
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
                       </FormControl>
                       {isStandalone && (
                         <FormDescription className="text-amber-700">
