@@ -251,6 +251,7 @@ const Sidebar = () => {
     { label: "Supplier Report", to: "/reports/suppliers" },
     { label: "Watav Report", to: "/reports/watav" },
     { label: "Sales Report", to: "/reports/sales" },
+    { label: "Outstanding Report", to: "/reports/outstanding" },
     { label: "Purchase Report", to: "/reports/purchases" },
     { label: "Sales Return Report", to: "/reports/sales-returns" },
     { label: "Purchase Return Report", to: "/reports/purchase-returns" },

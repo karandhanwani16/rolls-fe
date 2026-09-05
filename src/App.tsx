@@ -39,6 +39,7 @@ import ReturnForm from "./components/returns/ReturnForm";
 import SalesReturnReport from "./pages/reports/SalesReturnReport";
 import PurchaseReturnReport from "./pages/reports/PurchaseReturnReport";
 import WatavReport from "./pages/reports/WatavReport";
+import OutstandingReport from "./pages/reports/OutstandingReport";
 
 const queryClient = new QueryClient();
 
@@ -252,6 +253,11 @@ const AppContent = () => {
           <Route path="/reports/watav" element={
             <ProtectedRoute>
               <WatavReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/outstanding" element={
+            <ProtectedRoute>
+              <OutstandingReport />
             </ProtectedRoute>
           } />
 
