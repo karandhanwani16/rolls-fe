@@ -328,14 +328,36 @@ export const paymentsInAPI = {
     const response = await api.get('/payments-in');
     return response.data;
   },
-  getWatavReport: async ({ startDate, endDate, watavCustomerId }: { startDate: string, endDate: string, watavCustomerId?: string }) => {
+  getWatavReport: async ({
+    startDate,
+    endDate,
+    watavCustomerId,
+    collectionStatus,
+    entryType,
+  }: {
+    startDate: string;
+    endDate: string;
+    watavCustomerId?: string;
+    collectionStatus?: string;
+    entryType?: string;
+  }) => {
     const response = await api.get('/payments-in/watav-report', {
       params: {
         startDate,
         endDate,
         ...(watavCustomerId ? { watavCustomerId } : {}),
+        ...(collectionStatus ? { collectionStatus } : {}),
+        ...(entryType ? { entryType } : {}),
       },
     });
+    return response.data;
+  },
+  collect: async (data: { ids: string[]; collection_date?: string }) => {
+    const response = await api.post('/payments-in/collect', data);
+    return response.data;
+  },
+  uncollect: async (data: { ids: string[] }) => {
+    const response = await api.post('/payments-in/uncollect', data);
     return response.data;
   },
   create: async (data: any) => {

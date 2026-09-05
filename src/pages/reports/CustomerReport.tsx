@@ -397,6 +397,29 @@ const CustomerReport = () => {
                       {formatAmount(transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0))}
                     </span>
                   </div>
+                  {(transactions.summary?.normalPayments != null ||
+                    transactions.summary?.vatavPayments != null) && (
+                    <>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-muted-foreground">Normal Payments</span>
+                        <span className="font-medium">
+                          {formatAmount(transactions.summary?.normalPayments || 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-muted-foreground">Watav Payments</span>
+                        <span className="font-medium">
+                          {formatAmount(transactions.summary?.vatavPayments || 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-muted-foreground">Total Payments</span>
+                        <span className="font-medium">
+                          {formatAmount(transactions.summary?.totalPayments || 0)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="border-t border-sidebar/20 my-2" />
                   <div className="flex justify-between items-center">
                     <span className="font-semibold">Closing Balance</span>

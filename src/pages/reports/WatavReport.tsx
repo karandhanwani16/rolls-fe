@@ -11,9 +11,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
-import { Loader2, Download, FileText, FileSpreadsheet, Check, ChevronsUpDown } from "lucide-react";
+import {
+  Loader2,
+  Download,
+  FileText,
+  FileSpreadsheet,
+  Check,
+  ChevronsUpDown,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -34,6 +42,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const formatAmount = (amount: number) =>
@@ -50,6 +65,33 @@ const formatAmountForPDF = (amount: number) =>
     maximumFractionDigits: 2,
   }).format(amount || 0);
 
+const emptySummary = {
+  totalEntries: 0,
+  totalReceived: 0,
+  totalPaidToWatav: 0,
+  totalActualAmount: 0,
+  totalVendorCharges: 0,
+  totalNetAmount: 0,
+  pending: {
+    entries: 0,
+    gross: 0,
+    net: 0,
+    charges: 0,
+    customerLinkedGross: 0,
+    standaloneGross: 0,
+  },
+  collected: {
+    entries: 0,
+    gross: 0,
+    net: 0,
+    charges: 0,
+    customerLinkedGross: 0,
+    standaloneGross: 0,
+  },
+  customerLinked: { entries: 0, gross: 0, net: 0, charges: 0 },
+  standalone: { entries: 0, gross: 0, net: 0, charges: 0 },
+};
+
 const WatavReport = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -57,16 +99,18 @@ const WatavReport = () => {
   const [selectedWatav, setSelectedWatav] = useState<string>("");
   const [watavOpen, setWatavOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [startDate, setStartDate] = useState(format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd"));
+  const [startDate, setStartDate] = useState(
+    format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd")
+  );
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [collectionFilter, setCollectionFilter] = useState<string>("ALL");
+  const [entryTypeFilter, setEntryTypeFilter] = useState<string>("ALL");
   const [transactions, setTransactions] = useState<any[]>([]);
   const [byWatav, setByWatav] = useState<any[]>([]);
-  const [summary, setSummary] = useState({
-    totalEntries: 0,
-    totalReceived: 0,
-    totalPaidToWatav: 0,
-    totalActualAmount: 0,
-  });
+  const [summary, setSummary] = useState(emptySummary);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [collectionDate, setCollectionDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [collecting, setCollecting] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -74,7 +118,7 @@ const WatavReport = () => {
 
   useEffect(() => {
     fetchReport();
-  }, [startDate, endDate, selectedWatav]);
+  }, [startDate, endDate, selectedWatav, collectionFilter, entryTypeFilter]);
 
   const fetchCustomers = async () => {
     try {
@@ -88,21 +132,17 @@ const WatavReport = () => {
   const fetchReport = async () => {
     try {
       setLoading(true);
+      setSelectedIds([]);
       const data = await paymentsInAPI.getWatavReport({
         startDate,
         endDate,
         watavCustomerId: selectedWatav || undefined,
+        collectionStatus: collectionFilter === "ALL" ? undefined : collectionFilter,
+        entryType: entryTypeFilter === "ALL" ? undefined : entryTypeFilter,
       });
       setTransactions(data.data || []);
       setByWatav(data.byWatav || []);
-      setSummary(
-        data.summary || {
-          totalEntries: 0,
-          totalReceived: 0,
-          totalPaidToWatav: 0,
-          totalActualAmount: 0,
-        }
-      );
+      setSummary({ ...emptySummary, ...(data.summary || {}) });
     } catch (error) {
       console.error("Error fetching watav report:", error);
       toast({
@@ -115,26 +155,72 @@ const WatavReport = () => {
     }
   };
 
-  const selectedWatavName =
-    customers.find((c) => c.id === selectedWatav)?.name || "All Watav customers";
+  const watavCustomers = customers.filter((c) => c.type === "watav");
+  const vendorList = watavCustomers.length > 0 ? watavCustomers : customers;
 
-  const filteredCustomers = customers.filter(
+  const selectedWatavName =
+    customers.find((c) => c.id === selectedWatav)?.name || "All Watav vendors";
+
+  const filteredCustomers = vendorList.filter(
     (customer) =>
       customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const pendingSelectable = transactions.filter((t) => t.collectionStatus !== "COLLECTED");
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllPending = () => {
+    if (selectedIds.length === pendingSelectable.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(pendingSelectable.map((t) => t.id));
+    }
+  };
+
+  const handleCollect = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setCollecting(true);
+      await paymentsInAPI.collect({
+        ids: selectedIds,
+        collection_date: collectionDate,
+      });
+      toast({
+        title: "Collected",
+        description: `Marked ${selectedIds.length} entr${selectedIds.length === 1 ? "y" : "ies"} as collected.`,
+      });
+      await fetchReport();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to mark entries as collected",
+        variant: "destructive",
+      });
+    } finally {
+      setCollecting(false);
+    }
+  };
+
   const exportToCSV = () => {
     const headers = [
       "Sr. No.",
       "Date",
-      "Watav Customer",
-      "Actual Customer",
-      "Received Amount",
-      "Paid to Watav",
-      "Actual Amount",
-      "Type",
+      "Watav Vendor",
+      "Customer",
+      "Entry Type",
+      "Collection Status",
+      "Collection Date",
+      "Gross Amount",
+      "Vendor Charges",
+      "Net Amount",
+      "Instrument",
       "Description",
     ];
     const csvContent = [
@@ -144,10 +230,13 @@ const WatavReport = () => {
           item.srno,
           format(new Date(item.date), "yyyy-MM-dd"),
           `"${item.watavCustomerName}"`,
-          `"${item.actualCustomerName}"`,
+          `"${item.actualCustomerName || "None"}"`,
+          item.entryType,
+          item.collectionStatus,
+          item.collectionDate ? format(new Date(item.collectionDate), "yyyy-MM-dd") : "",
           item.receivedAmount,
-          item.paidToWatav,
-          item.actualAmount,
+          item.vendorCharges,
+          item.netAmount,
           `"${item.type || ""}"`,
           `"${item.description || ""}"`,
         ].join(",")
@@ -177,11 +266,11 @@ const WatavReport = () => {
     doc.setFontSize(16);
     doc.text("Mohit Traders", pageWidth / 2, 15, { align: "center" });
     doc.setFontSize(14);
-    doc.text("Watav Report — Amount Paid to Watav", pageWidth / 2, 25, { align: "center" });
+    doc.text("Watav Report", pageWidth / 2, 25, { align: "center" });
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.text(`Watav: ${selectedWatavName}`, margin, 35);
+    doc.text(`Vendor: ${selectedWatavName}`, margin, 35);
     doc.text(
       `Period: ${format(new Date(startDate), "dd/MM/yyyy")} to ${format(new Date(endDate), "dd/MM/yyyy")}`,
       margin,
@@ -191,30 +280,31 @@ const WatavReport = () => {
     doc.setFont("helvetica", "bold");
     doc.text("Summary", margin, 52);
     doc.setFont("helvetica", "normal");
-    doc.text(`Entries: ${summary.totalEntries}`, margin, 59);
-    doc.text(`Total Received: ₹${formatAmountForPDF(summary.totalReceived)}`, margin, 66);
-    doc.text(`Total Paid to Watav: ₹${formatAmountForPDF(summary.totalPaidToWatav)}`, margin, 73);
-    doc.text(`Total Actual Amount: ₹${formatAmountForPDF(summary.totalActualAmount)}`, margin, 80);
+    doc.text(`Gross: ₹${formatAmountForPDF(summary.totalReceived)}`, margin, 59);
+    doc.text(`Charges: ₹${formatAmountForPDF(summary.totalVendorCharges || summary.totalPaidToWatav)}`, margin, 66);
+    doc.text(`Net: ₹${formatAmountForPDF(summary.totalNetAmount || summary.totalActualAmount)}`, margin, 73);
+    doc.text(
+      `Pending net: ₹${formatAmountForPDF(summary.pending?.net || 0)} | Collected net: ₹${formatAmountForPDF(summary.collected?.net || 0)}`,
+      margin,
+      80
+    );
 
     autoTable(doc, {
       startY: 88,
-      head: [["Sr.", "Date", "Watav", "Customer", "Received", "Paid to Watav", "Actual"]],
+      head: [["Sr.", "Date", "Vendor", "Customer", "Type", "Status", "Gross", "Charges", "Net"]],
       body: transactions.map((item) => [
         item.srno,
         format(new Date(item.date), "dd/MM/yyyy"),
         item.watavCustomerName,
-        item.actualCustomerName,
+        item.actualCustomerName || "None",
+        item.entryType === "STANDALONE" ? "Standalone" : "Customer",
+        item.collectionStatus,
         `₹${formatAmountForPDF(item.receivedAmount)}`,
-        `₹${formatAmountForPDF(item.paidToWatav)}`,
-        `₹${formatAmountForPDF(item.actualAmount)}`,
+        `₹${formatAmountForPDF(item.vendorCharges)}`,
+        `₹${formatAmountForPDF(item.netAmount)}`,
       ]),
-      styles: { fontSize: 8, cellPadding: 2, font: "helvetica" },
+      styles: { fontSize: 7, cellPadding: 1.5, font: "helvetica" },
       headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: "bold" },
-      columnStyles: {
-        4: { halign: "right" },
-        5: { halign: "right" },
-        6: { halign: "right" },
-      },
       margin: { left: margin, right: margin },
       theme: "grid",
     });
@@ -227,7 +317,7 @@ const WatavReport = () => {
   return (
     <ReportLayout
       title="Watav Report"
-      description="See what you paid to watav customers (charges) on watav payment entries"
+      description="Vendor account balances — pending and collected Watav entries (customer-linked and standalone)"
     >
       <div className="flex flex-col space-y-4">
         <div className="flex flex-wrap gap-4 items-center">
@@ -259,11 +349,11 @@ const WatavReport = () => {
             <PopoverContent className="w-[260px] p-0">
               <Command>
                 <CommandInput
-                  placeholder="Search watav customer..."
+                  placeholder="Search watav vendor..."
                   value={searchQuery}
                   onValueChange={setSearchQuery}
                 />
-                <CommandEmpty>No customers found.</CommandEmpty>
+                <CommandEmpty>No vendors found.</CommandEmpty>
                 <CommandGroup>
                   <CommandItem
                     onSelect={() => {
@@ -272,12 +362,9 @@ const WatavReport = () => {
                     }}
                   >
                     <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        !selectedWatav ? "opacity-100" : "opacity-0"
-                      )}
+                      className={cn("mr-2 h-4 w-4", !selectedWatav ? "opacity-100" : "opacity-0")}
                     />
-                    All Watav customers
+                    All Watav vendors
                   </CommandItem>
                   {filteredCustomers.map((customer) => (
                     <CommandItem
@@ -301,6 +388,28 @@ const WatavReport = () => {
               </Command>
             </PopoverContent>
           </Popover>
+
+          <Select value={collectionFilter} onValueChange={setCollectionFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Collection" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All statuses</SelectItem>
+              <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="COLLECTED">Collected</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={entryTypeFilter} onValueChange={setEntryTypeFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Entry type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All entry types</SelectItem>
+              <SelectItem value="CUSTOMER_PAYMENT">Customer-linked</SelectItem>
+              <SelectItem value="STANDALONE">Standalone</SelectItem>
+            </SelectContent>
+          </Select>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -328,36 +437,54 @@ const WatavReport = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="bg-sidebar/5 rounded-lg p-4 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-sidebar/5 rounded-lg p-4 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <div className="text-sm text-muted-foreground">Total Received</div>
+                <div className="text-sm text-muted-foreground">Gross Watav</div>
                 <div className="font-semibold text-lg">{formatAmount(summary.totalReceived)}</div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Total Paid to Watav</div>
-                <div className="font-bold text-lg text-amber-700">
-                  {formatAmount(summary.totalPaidToWatav)}
+                <div className="text-sm text-muted-foreground">Vendor Charges</div>
+                <div className="font-semibold text-lg text-amber-700">
+                  {formatAmount(summary.totalVendorCharges || summary.totalPaidToWatav)}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Total Actual Amount</div>
-                <div className="font-semibold text-lg">{formatAmount(summary.totalActualAmount)}</div>
+                <div className="text-sm text-muted-foreground">Pending (Net)</div>
+                <div className="font-bold text-lg text-amber-800">
+                  {formatAmount(summary.pending?.net || 0)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Customer {formatAmount(summary.pending?.customerLinkedGross || 0)} · Standalone{" "}
+                  {formatAmount(summary.pending?.standaloneGross || 0)}
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Collected (Net)</div>
+                <div className="font-bold text-lg text-green-700">
+                  {formatAmount(summary.collected?.net || 0)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Customer {formatAmount(summary.collected?.customerLinkedGross || 0)} · Standalone{" "}
+                  {formatAmount(summary.collected?.standaloneGross || 0)}
+                </div>
               </div>
             </div>
 
             {!selectedWatav && byWatav.length > 0 && (
               <div className="rounded-md border overflow-hidden">
                 <div className="bg-sidebar px-4 py-2 text-white text-sm font-medium">
-                  Paid to Watav — by customer
+                  Vendor Account Summary
                 </div>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Watav Customer</TableHead>
+                      <TableHead>Vendor</TableHead>
                       <TableHead className="text-right">Entries</TableHead>
-                      <TableHead className="text-right">Received</TableHead>
-                      <TableHead className="text-right">Paid to Watav</TableHead>
-                      <TableHead className="text-right">Actual Amount</TableHead>
+                      <TableHead className="text-right">Customer / Standalone</TableHead>
+                      <TableHead className="text-right">Gross</TableHead>
+                      <TableHead className="text-right">Charges</TableHead>
+                      <TableHead className="text-right">Pending Net</TableHead>
+                      <TableHead className="text-right">Collected Net</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -365,11 +492,21 @@ const WatavReport = () => {
                       <TableRow key={row.watavCustomerId}>
                         <TableCell className="font-medium">{row.watavCustomerName}</TableCell>
                         <TableCell className="text-right">{row.entries}</TableCell>
-                        <TableCell className="text-right">{formatAmount(row.totalReceived)}</TableCell>
-                        <TableCell className="text-right font-semibold text-amber-700">
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {row.customerLinkedEntries} / {row.standaloneEntries}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatAmount(row.totalReceived)}
+                        </TableCell>
+                        <TableCell className="text-right text-amber-700">
                           {formatAmount(row.totalPaidToWatav)}
                         </TableCell>
-                        <TableCell className="text-right">{formatAmount(row.totalActualAmount)}</TableCell>
+                        <TableCell className="text-right font-semibold text-amber-800">
+                          {formatAmount(row.pendingNet)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-green-700">
+                          {formatAmount(row.collectedNet)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -377,57 +514,123 @@ const WatavReport = () => {
               </div>
             )}
 
+            {pendingSelectable.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 rounded-md border bg-amber-50/60 p-3">
+                <Checkbox
+                  checked={
+                    selectedIds.length > 0 && selectedIds.length === pendingSelectable.length
+                  }
+                  onCheckedChange={toggleSelectAllPending}
+                />
+                <span className="text-sm">
+                  Select pending entries for combined collection ({selectedIds.length} selected)
+                </span>
+                <Input
+                  type="date"
+                  value={collectionDate}
+                  onChange={(e) => setCollectionDate(e.target.value)}
+                  className="w-[160px]"
+                />
+                <Button
+                  size="sm"
+                  disabled={selectedIds.length === 0 || collecting}
+                  onClick={handleCollect}
+                  className="bg-brand-teal hover:bg-teal-700"
+                >
+                  {collecting ? "Collecting..." : "Mark Collected"}
+                </Button>
+              </div>
+            )}
+
             <div className="rounded-md border overflow-hidden">
               <Table>
                 <TableHeader className="bg-sidebar">
                   <TableRow>
-                    <TableHead className="text-white rounded-tl-lg">Sr.</TableHead>
+                    <TableHead className="text-white w-10" />
+                    <TableHead className="text-white">Sr.</TableHead>
                     <TableHead className="text-white">Date</TableHead>
-                    <TableHead className="text-white">Watav Customer</TableHead>
-                    <TableHead className="text-white">Actual Customer</TableHead>
-                    <TableHead className="text-white text-right">Received</TableHead>
-                    <TableHead className="text-white text-right">Paid to Watav</TableHead>
-                    <TableHead className="text-white text-right">Actual</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Type</TableHead>
+                    <TableHead className="text-white">Vendor</TableHead>
+                    <TableHead className="text-white">Customer</TableHead>
+                    <TableHead className="text-white">Entry</TableHead>
+                    <TableHead className="text-white">Status</TableHead>
+                    <TableHead className="text-white text-right">Gross</TableHead>
+                    <TableHead className="text-white text-right">Charges</TableHead>
+                    <TableHead className="text-white text-right">Net</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transactions.length > 0 ? (
                     <>
-                      {transactions.map((item) => (
-                        <TableRow key={item.id} className="hover:bg-sidebar/10">
-                          <TableCell>{item.srno}</TableCell>
-                          <TableCell>{format(new Date(item.date), "yyyy-MM-dd")}</TableCell>
-                          <TableCell className="font-medium">{item.watavCustomerName}</TableCell>
-                          <TableCell>{item.actualCustomerName}</TableCell>
-                          <TableCell className="text-right">{formatAmount(item.receivedAmount)}</TableCell>
-                          <TableCell className="text-right font-semibold text-amber-700">
-                            {formatAmount(item.paidToWatav)}
-                          </TableCell>
-                          <TableCell className="text-right">{formatAmount(item.actualAmount)}</TableCell>
-                          <TableCell className="capitalize">{item.type}</TableCell>
-                        </TableRow>
-                      ))}
+                      {transactions.map((item) => {
+                        const isPending = item.collectionStatus !== "COLLECTED";
+                        return (
+                          <TableRow key={item.id} className="hover:bg-sidebar/10">
+                            <TableCell>
+                              {isPending ? (
+                                <Checkbox
+                                  checked={selectedIds.includes(item.id)}
+                                  onCheckedChange={() => toggleSelect(item.id)}
+                                />
+                              ) : null}
+                            </TableCell>
+                            <TableCell>{item.srno}</TableCell>
+                            <TableCell>{format(new Date(item.date), "yyyy-MM-dd")}</TableCell>
+                            <TableCell className="font-medium">{item.watavCustomerName}</TableCell>
+                            <TableCell>
+                              {item.actualCustomerName || (
+                                <span className="italic text-muted-foreground">None</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {item.entryType === "STANDALONE" ? "Standalone" : "Customer"}
+                            </TableCell>
+                            <TableCell>
+                              <span
+                                className={
+                                  item.collectionStatus === "COLLECTED"
+                                    ? "text-green-700 font-medium"
+                                    : "text-amber-700 font-medium"
+                                }
+                              >
+                                {item.collectionStatus === "COLLECTED" ? "Collected" : "Pending"}
+                              </span>
+                              {item.collectionDate && (
+                                <div className="text-xs text-muted-foreground">
+                                  {format(new Date(item.collectionDate), "dd/MM/yyyy")}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatAmount(item.receivedAmount)}
+                            </TableCell>
+                            <TableCell className="text-right text-amber-700">
+                              {formatAmount(item.vendorCharges)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatAmount(item.netAmount)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                       <TableRow className="border-t-2 border-sidebar/20">
-                        <TableCell colSpan={4} className="text-right font-medium">
+                        <TableCell colSpan={7} className="text-right font-medium">
                           Total
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatAmount(summary.totalReceived)}
                         </TableCell>
                         <TableCell className="text-right font-bold text-amber-700">
-                          {formatAmount(summary.totalPaidToWatav)}
+                          {formatAmount(summary.totalVendorCharges || summary.totalPaidToWatav)}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatAmount(summary.totalActualAmount)}
+                          {formatAmount(summary.totalNetAmount || summary.totalActualAmount)}
                         </TableCell>
-                        <TableCell />
                       </TableRow>
                     </>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
-                        No watav payment entries found for this period
+                      <TableCell colSpan={10} className="text-center py-8">
+                        No watav entries found for this period
                       </TableCell>
                     </TableRow>
                   )}
