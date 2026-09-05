@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   BarChart2,
   Undo2,
+  Clock3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -156,6 +157,11 @@ const Sidebar = () => {
       path: "/payments-in",
     },
     {
+      title: "Pending Watav",
+      icon: Clock3,
+      path: "/watav-pending",
+    },
+    {
       title: "Payment Out",
       icon: ArrowUpFromLine,
       path: "/payments-out",
@@ -250,6 +256,7 @@ const Sidebar = () => {
     { label: "Customer Report", to: "/reports/customers" },
     { label: "Supplier Report", to: "/reports/suppliers" },
     { label: "Watav Report", to: "/reports/watav" },
+    { label: "Pending Watav", to: "/watav-pending" },
     { label: "Sales Report", to: "/reports/sales" },
     { label: "Outstanding Report", to: "/reports/outstanding" },
     { label: "Purchase Report", to: "/reports/purchases" },

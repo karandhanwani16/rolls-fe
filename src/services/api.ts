@@ -335,16 +335,16 @@ export const paymentsInAPI = {
     collectionStatus,
     entryType,
   }: {
-    startDate: string;
-    endDate: string;
+    startDate?: string;
+    endDate?: string;
     watavCustomerId?: string;
     collectionStatus?: string;
     entryType?: string;
   }) => {
     const response = await api.get('/payments-in/watav-report', {
       params: {
-        startDate,
-        endDate,
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
         ...(watavCustomerId ? { watavCustomerId } : {}),
         ...(collectionStatus ? { collectionStatus } : {}),
         ...(entryType ? { entryType } : {}),

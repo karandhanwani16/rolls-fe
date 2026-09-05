@@ -39,6 +39,7 @@ import ReturnForm from "./components/returns/ReturnForm";
 import SalesReturnReport from "./pages/reports/SalesReturnReport";
 import PurchaseReturnReport from "./pages/reports/PurchaseReturnReport";
 import WatavReport from "./pages/reports/WatavReport";
+import PendingWatav from "./pages/PendingWatav";
 import OutstandingReport from "./pages/reports/OutstandingReport";
 
 const queryClient = new QueryClient();
@@ -126,6 +127,11 @@ const AppContent = () => {
           <Route path="/payments-in" element={
             <ProtectedRoute>
               <PaymentsIn />
+            </ProtectedRoute>
+          } />
+          <Route path="/watav-pending" element={
+            <ProtectedRoute>
+              <PendingWatav />
             </ProtectedRoute>
           } />
           <Route path="/payments-out" element={
