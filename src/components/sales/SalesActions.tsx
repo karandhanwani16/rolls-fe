@@ -9,12 +9,14 @@ interface SalesActionsProps {
     setFormData: (data: any) => void;
 }
 
-const calcTotal = (items: any[], transportCharges: number) => {
+const calcTotal = (items: any[], transportCharges: number, discount: number) => {
     const itemsTotal = (items || []).reduce(
         (sum, item) => sum + (item.total_price || 0),
         0
     );
-    return Math.round(itemsTotal + (Number(transportCharges) || 0));
+    return Math.round(
+        itemsTotal + (Number(transportCharges) || 0) - (Number(discount) || 0)
+    );
 };
 
 const SalesActions = ({
@@ -32,7 +34,24 @@ const SalesActions = ({
         setFormData((prev: any) => ({
             ...prev,
             transport_charges,
-            total_amount: calcTotal(prev.items, transport_charges),
+            total_amount: calcTotal(prev.items, transport_charges, prev.discount || 0),
+        }));
+    };
+
+    const handleDiscountChange = (value: string) => {
+        const discount = parseFloat(value) || 0;
+        setFormData((prev: any) => ({
+            ...prev,
+            discount,
+            total_amount: calcTotal(prev.items, prev.transport_charges || 0, discount),
+        }));
+    };
+
+    const handleCreditDaysChange = (value: string) => {
+        const credit_days = parseInt(value, 10) || 0;
+        setFormData((prev: any) => ({
+            ...prev,
+            credit_days,
         }));
     };
 
@@ -45,7 +64,7 @@ const SalesActions = ({
                 </CardTitle>
             </CardHeader>
             <CardContent ref={containerRef} onKeyDownCapture={onKeyDownCapture}>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="items_total">Items Total (₹)</Label>
                         <Input
@@ -66,6 +85,30 @@ const SalesActions = ({
                             value={formData.transport_charges ?? 0}
                             onChange={(e) => handleTransportChange(e.target.value)}
                             placeholder="0.00"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="discount">Discount (₹)</Label>
+                        <Input
+                            id="discount"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.discount ?? 0}
+                            onChange={(e) => handleDiscountChange(e.target.value)}
+                            placeholder="0.00"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="credit_days">Credit Days</Label>
+                        <Input
+                            id="credit_days"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={formData.credit_days ?? 0}
+                            onChange={(e) => handleCreditDaysChange(e.target.value)}
+                            placeholder="0"
                         />
                     </div>
                     <div className="space-y-2">

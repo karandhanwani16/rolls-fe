@@ -39,7 +39,7 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
   handleRollChange,
   removeItem,
   availableRolls,
-  defaultCustomRoll = true,
+  defaultCustomRoll = false,
   setRef,
   createKeyDownHandler,
 }) => {
@@ -210,7 +210,9 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
                 {availableRolls && availableRolls.length > 0 ? (
                   availableRolls.map((roll: any) => (
                     <SelectItem key={roll.roll_no} value={roll.roll_no}>
-                      {roll.roll_no} - {roll.meters}{getUnitMeta(roll.unit).abbr} @ ₹{roll.price}
+                      {roll.roll_no}
+                      {roll.shade ? ` / ${roll.shade}` : ""} - {roll.meters}
+                      {getUnitMeta(roll.unit).abbr} @ ₹{roll.price}
                     </SelectItem>
                   ))
                 ) : (
@@ -245,11 +247,9 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
             readOnly={!metersEditable}
             className={!metersEditable ? 'bg-gray-50 min-w-[90px]' : 'min-w-[90px]'}
           />
-          <QuantityUnitSelect
-            value={item.unit || DEFAULT_QUANTITY_UNIT}
-            onChange={(unit) => handleItemChange(index, 'unit', unit)}
-            disabled={!metersEditable}
-          />
+          <span className="text-sm text-muted-foreground min-w-[2rem]">
+            {getUnitMeta(item.unit || DEFAULT_QUANTITY_UNIT).abbr}
+          </span>
         </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">

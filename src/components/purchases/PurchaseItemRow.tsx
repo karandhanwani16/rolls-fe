@@ -9,8 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
-import QuantityUnitSelect from "@/components/ui/quantity-unit-select";
-import { DEFAULT_QUANTITY_UNIT } from "@/lib/quantityUnits";
+import { DEFAULT_QUANTITY_UNIT, getUnitMeta } from "@/lib/quantityUnits";
 
 interface PurchaseItemRowProps {
   item: any;
@@ -138,6 +137,16 @@ const PurchaseItemRow = ({
           />
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
+          <Input
+            ref={setRef("shade", index)}
+            value={item.shade || ""}
+            onChange={(e) => handleItemChange(index, "shade", e.target.value)}
+            onKeyDown={(e) => handleKeyDown(e, "shade")}
+            placeholder="Shade no."
+            className="focus-visible:ring-brand-teal"
+          />
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap">
           <div className="flex items-center gap-2">
             <Input
               ref={setRef("meters", index)}
@@ -152,10 +161,9 @@ const PurchaseItemRow = ({
               className="focus-visible:ring-brand-teal min-w-[90px]"
               required
             />
-            <QuantityUnitSelect
-              value={item.unit || DEFAULT_QUANTITY_UNIT}
-              onChange={(unit) => handleItemChange(index, "unit", unit)}
-            />
+            <span className="text-sm text-muted-foreground min-w-[2rem]">
+              {getUnitMeta(item.unit || DEFAULT_QUANTITY_UNIT).abbr}
+            </span>
           </div>
         </td>
         <td className="px-6 py-4 whitespace-nowrap">

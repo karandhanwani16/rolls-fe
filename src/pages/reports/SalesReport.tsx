@@ -122,7 +122,11 @@ const SalesReport = () => {
       "Description",
       "Hamaal",
       "Challan No",
-      "Transport Charges"
+      "Transport Charges",
+      "Discount",
+      "Credit Days",
+      "Outstanding",
+      "Overdue Days"
     ];
     const csvContent = [
       headers.join(","),
@@ -136,6 +140,10 @@ const SalesReport = () => {
           `"${sale.hamaal || ''}"`,
           `"${sale.challan_no || ''}"`,
           sale.transport_charges || 0,
+          sale.discount || 0,
+          sale.credit_days || 0,
+          sale.remaining_amount ?? sale.total,
+          sale.overdue_days || 0,
         ].join(",");
       }),
     ].join("\n");
@@ -195,14 +203,15 @@ const SalesReport = () => {
     // Add sales table
     autoTable(doc, {
       startY: 75,
-      head: [["Sales No", "Customer", "Date", "Total", "Challan No", "Transport Charges"]],
+      head: [["Sales No", "Customer", "Date", "Total", "Outstanding", "Overdue", "Credit"]],
       body: filteredSales.map((sale) => [
         sale.sales_no,
         sale.customer_name,
         format(new Date(sale.date), "dd/MM/yyyy"),
         `₹${formatAmount(sale.total)}`,
-        sale.challan_no || "-",
-        `₹${formatAmount(sale.transport_charges || 0)}`
+        `₹${formatAmount(sale.remaining_amount ?? sale.total)}`,
+        String(sale.overdue_days || 0),
+        String(sale.credit_days || 0),
       ]),
       styles: {
         fontSize: 9,
@@ -414,8 +423,9 @@ const SalesReport = () => {
                     <TableHead className="text-white">Customer</TableHead>
                     <TableHead className="text-white">Date</TableHead>
                     <TableHead className="text-white">Total</TableHead>
-                    <TableHead className="text-white">Challan No</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Transport Charges</TableHead>
+                    <TableHead className="text-white">Outstanding</TableHead>
+                    <TableHead className="text-white">Credit Days</TableHead>
+                    <TableHead className="text-white rounded-tr-lg">Overdue Days</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -429,8 +439,21 @@ const SalesReport = () => {
                           <TableCell className="text-right">
                             {formatAmount(sale.total)}
                           </TableCell>
-                          <TableCell>{sale.challan_no || "-"}</TableCell>
-                          <TableCell>{formatAmount(sale.transport_charges || 0)}</TableCell>
+                          <TableCell className="text-right">
+                            {sale.payment_status === "FULL"
+                              ? "Paid"
+                              : formatAmount(sale.remaining_amount ?? sale.total)}
+                          </TableCell>
+                          <TableCell className="text-right">{sale.credit_days ?? 0}</TableCell>
+                          <TableCell className="text-right">
+                            {sale.payment_status === "FULL" ? (
+                              "—"
+                            ) : (sale.overdue_days || 0) > 0 ? (
+                              <span className="text-red-600 font-medium">{sale.overdue_days}</span>
+                            ) : (
+                              0
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="border-t-2 border-sidebar/20">
@@ -438,12 +461,21 @@ const SalesReport = () => {
                         <TableCell className="text-right font-medium">
                           {formatAmount(filteredSales.reduce((sum, sale) => sum + sale.total, 0))}
                         </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatAmount(
+                            filteredSales.reduce(
+                              (sum, sale) =>
+                                sum + (sale.payment_status === "FULL" ? 0 : (sale.remaining_amount ?? sale.total)),
+                              0
+                            )
+                          )}
+                        </TableCell>
                         <TableCell colSpan={2}></TableCell>
                       </TableRow>
                     </>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
+                      <TableCell colSpan={7} className="text-center py-8">
                         No sales data found
                       </TableCell>
                     </TableRow>

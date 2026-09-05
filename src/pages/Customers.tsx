@@ -52,6 +52,7 @@ type Customer = {
   type: string | null;
   opening_balance: number;
   opening_balance_date: string | null;
+  credit_days: number;
   created_at: string;
   updated_at: string;
   // Frontend-only properties
@@ -68,6 +69,7 @@ const customerFormSchema = z.object({
   type: z.string().nullable(),
   opening_balance: z.coerce.number().default(0),
   opening_balance_date: z.string().nullable(),
+  credit_days: z.coerce.number().int().min(0).default(0),
 }).refine(
   (data) => data.opening_balance === 0 || (data.opening_balance_date && data.opening_balance_date.length > 0),
   {
@@ -99,6 +101,7 @@ const Customers = () => {
       type: "",
       opening_balance: 0,
       opening_balance_date: "",
+      credit_days: 0,
     },
   });
 
@@ -112,6 +115,7 @@ const Customers = () => {
       type: "",
       opening_balance: 0,
       opening_balance_date: "",
+      credit_days: 0,
     },
   });
 
@@ -133,6 +137,7 @@ const Customers = () => {
         opening_balance_date: selectedCustomer.opening_balance_date
           ? selectedCustomer.opening_balance_date.slice(0, 10)
           : "",
+        credit_days: selectedCustomer.credit_days ?? 0,
       });
     }
   }, [selectedCustomer, isEditDialogOpen, editForm]);
@@ -208,6 +213,7 @@ const Customers = () => {
         customer_type: values.type,
         opening_balance: values.opening_balance,
         opening_balance_date: values.opening_balance_date || null,
+        credit_days: values.credit_days || 0,
       };
       await customersAPI.create(backendData);
       toast({
@@ -247,6 +253,7 @@ const Customers = () => {
         customer_type: values.type,
         opening_balance: values.opening_balance,
         opening_balance_date: values.opening_balance_date || null,
+        credit_days: values.credit_days || 0,
       };
       await customersAPI.update(selectedCustomer.id, backendData);
       toast({
@@ -333,6 +340,7 @@ const Customers = () => {
                   <TableHead>Phone</TableHead>
                   <TableHead>City</TableHead>
                   <TableHead>Opening Balance</TableHead>
+                  <TableHead>Credit Days</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -340,7 +348,7 @@ const Customers = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       Loading customers...
                     </TableCell>
                   </TableRow>
@@ -378,6 +386,7 @@ const Customers = () => {
                           "—"
                         )}
                       </TableCell>
+                      <TableCell>{customer.credit_days ?? 0}</TableCell>
                       <TableCell>{customer.description}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -412,7 +421,7 @@ const Customers = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       No customers found.
                     </TableCell>
                   </TableRow>
@@ -522,6 +531,25 @@ const Customers = () => {
                         type="date"
                         {...field}
                         value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="credit_days"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Credit Days</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        {...field}
+                        placeholder="0"
                       />
                     </FormControl>
                     <FormMessage />
@@ -669,6 +697,25 @@ const Customers = () => {
                         type="date"
                         {...field}
                         value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="credit_days"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Credit Days</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        {...field}
+                        placeholder="0"
                       />
                     </FormControl>
                     <FormMessage />

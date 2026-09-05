@@ -15,7 +15,7 @@ import PurchaseDetails from "./PurchaseDetails";
 import PurchaseItems from "./PurchaseItems";
 import PurchaseActions from "./PurchaseActions";
 import BulkProductAdder from "./BulkProductAdder";
-import { DEFAULT_QUANTITY_UNIT, formatUnitTotals, sumQuantityByUnit } from "@/lib/quantityUnits";
+import { DEFAULT_QUANTITY_UNIT, formatQuantity, normalizeUnit } from "@/lib/quantityUnits";
 
 interface PurchaseItem {
   purchase_item_id: string;
@@ -23,6 +23,7 @@ interface PurchaseItem {
   product_id: string;
   product_name: string;
   roll_no: string;
+  shade?: string;
   meters: number;
   unit?: string;
   price: number;
@@ -41,6 +42,8 @@ interface PurchaseFormData {
   godown_no?: string;
   transport?: string;
   transport_charges?: number;
+  discount?: number;
+  unit?: string;
   received_by?: string;
   items: PurchaseItem[];
 }
@@ -57,6 +60,8 @@ const PurchaseForm = () => {
     supplier_name: "",
     total_amount: 0,
     transport_charges: 0,
+    discount: 0,
+    unit: DEFAULT_QUANTITY_UNIT,
     items: [],
   });
 
@@ -146,6 +151,8 @@ const PurchaseForm = () => {
           godown_no: response.godown,
           transport: response.transport,
           transport_charges: response.transport_charges || 0,
+          discount: response.discount || 0,
+          unit: normalizeUnit(response.unit || response.items?.[0]?.unit),
           received_by: response.received_by,
           items: items || [],
         }));
@@ -166,21 +173,25 @@ const PurchaseForm = () => {
         0
       );
       const transportCharges = formData.transport_charges || 0;
+      const discount = formData.discount || 0;
 
       setFormData((prev) => ({
         ...prev,
         items: updatedItems,
-        total_amount: parseFloat((itemsTotal + transportCharges).toFixed(2)),
+        total_amount: parseFloat((itemsTotal + transportCharges - discount).toFixed(2)),
       }));
     } else {
       setFormData((prev) => ({
         ...prev,
-        total_amount: parseFloat((prev.transport_charges || 0).toFixed(2)),
+        total_amount: parseFloat(
+          ((prev.transport_charges || 0) - (prev.discount || 0)).toFixed(2)
+        ),
       }));
     }
   }, [
     formData.items.map((item) => `${item.meters}-${item.price}`).join(","),
     formData.transport_charges,
+    formData.discount,
   ]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -246,8 +257,9 @@ const PurchaseForm = () => {
           product_id: "",
           product_name: "",
           roll_no: "",
+          shade: "",
           meters: 0,
-          unit: DEFAULT_QUANTITY_UNIT,
+          unit: formData.unit || DEFAULT_QUANTITY_UNIT,
           price: 0,
           total_price: 0,
           created_at: "",
@@ -279,8 +291,9 @@ const PurchaseForm = () => {
         product_id: product.id,
         product_name: product.name,
         roll_no: "",
+        shade: "",
         meters: 0,
-        unit: DEFAULT_QUANTITY_UNIT,
+        unit: formData.unit || DEFAULT_QUANTITY_UNIT,
         price: product.price || 0,
         total_price: 0,
         created_at: "",
@@ -299,29 +312,29 @@ const PurchaseForm = () => {
   };
 
   const getGroupedMeters = () => {
-    const groupMap = new Map<
-      string,
-      { product_name: string; totals: ReturnType<typeof sumQuantityByUnit> }
-    >();
+    const billUnit = formData.unit || DEFAULT_QUANTITY_UNIT;
+    const groupMap = new Map<string, { product_name: string; qty: number }>();
 
     formData.items.forEach((item) => {
       const key = item.product_id;
       const current = groupMap.get(key);
-      const itemTotals = sumQuantityByUnit([item]);
+      const qty = item.meters || 0;
 
       if (current) {
-        current.totals.m += itemTotals.m;
-        current.totals.yd += itemTotals.yd;
-        current.totals.kg += itemTotals.kg;
+        current.qty += qty;
       } else {
         groupMap.set(key, {
           product_name: item.product_name,
-          totals: itemTotals,
+          qty,
         });
       }
     });
 
-    return Array.from(groupMap.values());
+    return {
+      billUnit,
+      groups: Array.from(groupMap.values()),
+      totalQty: formData.items.reduce((sum, item) => sum + (item.meters || 0), 0),
+    };
   };
 
   return (
@@ -387,17 +400,23 @@ const PurchaseForm = () => {
               Total Quantity by Product
             </h3>
             <ul className="text-sm text-gray-700 space-y-1">
-              {getGroupedMeters().map((group, idx) => (
-                <li key={idx}>
-                  {group.product_name}: {formatUnitTotals(group.totals)}
-                </li>
-              ))}
+              {(() => {
+                const { billUnit, groups } = getGroupedMeters();
+                return groups.map((group, idx) => (
+                  <li key={idx}>
+                    {group.product_name}: {formatQuantity(group.qty, billUnit)}
+                  </li>
+                ));
+              })()}
             </ul>
             <h3 className="text-lg font-semibold text-gray-800 mt-4">
               Total Quantity
             </h3>
             <p className="text-sm text-gray-700">
-              {formatUnitTotals(sumQuantityByUnit(formData.items))}
+              {(() => {
+                const { billUnit, totalQty } = getGroupedMeters();
+                return formatQuantity(totalQty, billUnit);
+              })()}
             </p>
           </div>
         </div>

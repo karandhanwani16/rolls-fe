@@ -16,7 +16,7 @@ import SalesDetails from "./SalesDetails";
 import SalesItems from "./SalesItems";
 import SalesActions from "./SalesActions";
 import { downloadSalePdf } from "@/lib/downloadSalePdf";
-import { DEFAULT_QUANTITY_UNIT } from "@/lib/quantityUnits";
+import { DEFAULT_QUANTITY_UNIT, normalizeUnit } from "@/lib/quantityUnits";
 
 interface SalesItem {
   sales_item_id: string;
@@ -54,6 +54,9 @@ interface SalesFormData {
   challan_no?: string;
   maker?: string;
   transport_charges?: number;
+  discount?: number;
+  credit_days?: number;
+  unit?: string;
   items: SalesItem[];
 }
 
@@ -71,6 +74,9 @@ const SalesForm = () => {
     total_amount: 0,
     maker: "",
     transport_charges: 0,
+    discount: 0,
+    credit_days: 0,
+    unit: DEFAULT_QUANTITY_UNIT,
     items: [],
   });
 
@@ -234,6 +240,9 @@ const SalesForm = () => {
             challan_no: response.challan_no,
             maker: response.maker,
             transport_charges: response.transport_charges || 0,
+            discount: response.discount || 0,
+            credit_days: response.credit_days || 0,
+            unit: normalizeUnit(response.unit || response.items?.[0]?.unit),
             items: itemsWithRolls || [],
           }));
         } catch (error) {
@@ -270,7 +279,7 @@ const SalesForm = () => {
           0
         );
         const totalAmount = Math.round(
-          itemsTotal + (formData.transport_charges || 0)
+          itemsTotal + (formData.transport_charges || 0) - (formData.discount || 0)
         );
         
         setFormData((prev) => ({
@@ -353,13 +362,13 @@ const SalesForm = () => {
         }
       }
 
-      // Calculate total amount including transport charges
+      // Calculate total amount including transport charges and discount
       const itemsTotal = newItems.reduce(
         (sum, item) => sum + (item.total_price || 0),
         0
       );
       const totalAmount = Math.round(
-        itemsTotal + (prevFormData.transport_charges || 0)
+        itemsTotal + (prevFormData.transport_charges || 0) - (prevFormData.discount || 0)
       );
       
       return {
@@ -437,8 +446,9 @@ const SalesForm = () => {
         roll_no: selectedRoll.roll_no,
         roll_id: selectedRoll.id,
         purchase_item_id: selectedRoll.id,
+        shade: selectedRoll.shade || "",
         meters: selectedRoll.meters,
-        unit: selectedRoll.unit || DEFAULT_QUANTITY_UNIT,
+        unit: formData.unit || DEFAULT_QUANTITY_UNIT,
         price: selectedRoll.price,
         total_price: parseFloat(
           (selectedRoll.meters * selectedRoll.price).toFixed(2)
@@ -453,7 +463,7 @@ const SalesForm = () => {
         ...formData,
         items: newItems,
         total_amount: Math.round(
-          itemsTotal + (formData.transport_charges || 0)
+          itemsTotal + (formData.transport_charges || 0) - (formData.discount || 0)
         ),
       });
     }
@@ -474,7 +484,7 @@ const SalesForm = () => {
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
-          unit: DEFAULT_QUANTITY_UNIT,
+          unit: formData.unit || DEFAULT_QUANTITY_UNIT,
           price: 0,
           total_price: 0,
           created_at: "",
@@ -526,7 +536,9 @@ const SalesForm = () => {
     setFormData({
       ...formData,
       items: newItems,
-      total_amount: Math.round(itemsTotal + (formData.transport_charges || 0)),
+      total_amount: Math.round(
+        itemsTotal + (formData.transport_charges || 0) - (formData.discount || 0)
+      ),
     });
   };
 
@@ -555,7 +567,7 @@ const SalesForm = () => {
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
-          unit: DEFAULT_QUANTITY_UNIT,
+          unit: formData.unit || DEFAULT_QUANTITY_UNIT,
           price: product.price || 0,
           total_price: 0,
           created_at: "",

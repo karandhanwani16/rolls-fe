@@ -41,8 +41,11 @@ interface Sale {
   sales_no: string;
   date: string;
   total: number;
+  credit_days?: number;
   cleared_amount: number;
   remaining_amount: number;
+  overdue_days?: number;
+  due_date?: string;
   status: string;
   new_cleared_amount?: number;
   can_settle?: boolean;
@@ -499,6 +502,8 @@ const BillToBillPayment = () => {
                           <TableHead>No.</TableHead>
                           <TableHead>Invoice No.</TableHead>
                           <TableHead>Date</TableHead>
+                          <TableHead className="text-right">Credit Days</TableHead>
+                          <TableHead className="text-right">Overdue Days</TableHead>
                           <TableHead className="text-right">Total Amount</TableHead>
                           <TableHead className="text-right">Already Cleared</TableHead>
                           <TableHead className="text-right">To Be Cleared</TableHead>
@@ -515,6 +520,20 @@ const BillToBillPayment = () => {
                               <TableCell>{sale.sales_no}</TableCell>
                               <TableCell>
                                 {format(new Date(sale.date), "dd MMM yyyy")}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {sale.credit_days ?? 0}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {sale.status === "FULL" ? (
+                                  "—"
+                                ) : (sale.overdue_days || 0) > 0 ? (
+                                  <span className="text-red-600 font-medium">
+                                    {sale.overdue_days}
+                                  </span>
+                                ) : (
+                                  0
+                                )}
                               </TableCell>
                               <TableCell className="text-right">
                                 {formatCurrency(sale.total)}
@@ -549,7 +568,7 @@ const BillToBillPayment = () => {
                           ))
                         ) : (
                           <TableRow>
-                            <TableCell colSpan={9} className="text-center py-4">
+                            <TableCell colSpan={11} className="text-center py-4">
                               {fullyPaidCount > 0
                                 ? "All bills are fully paid. Turn on Show fully paid to view them."
                                 : "No sales data available"}

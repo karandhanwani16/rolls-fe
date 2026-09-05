@@ -5,6 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from 'lucide-react';
 import { useFormSectionNavigation } from '@/lib/formKeyboardNavigation';
+import QuantityUnitSelect from '@/components/ui/quantity-unit-select';
+import { DEFAULT_QUANTITY_UNIT } from '@/lib/quantityUnits';
 
 interface SalesDetailsProps {
     formData: any;
@@ -25,6 +27,14 @@ const SalesDetails = ({
         setFormData((prev: any) => ({
             ...prev,
             [field]: value,
+        }));
+    };
+
+    const handleUnitChange = (unit: string) => {
+        setFormData((prev: any) => ({
+            ...prev,
+            unit,
+            items: (prev.items || []).map((item: any) => ({ ...item, unit })),
         }));
     };
 
@@ -68,8 +78,12 @@ const SalesDetails = ({
                             value={formData.customer_id}
                             onValueChange={(value) => {
                                 const customer = customers.find(c => c.id === value);
-                                handleChange('customer_id', value);
-                                handleChange('customer_name', customer?.name || '');
+                                setFormData((prev: any) => ({
+                                    ...prev,
+                                    customer_id: value,
+                                    customer_name: customer?.name || '',
+                                    credit_days: customer?.credit_days ?? prev.credit_days ?? 0,
+                                }));
                             }}
                         >
                             <SelectTrigger>
@@ -102,6 +116,18 @@ const SalesDetails = ({
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Quantity Unit</Label>
+                        <QuantityUnitSelect
+                            value={formData.unit || DEFAULT_QUANTITY_UNIT}
+                            onChange={handleUnitChange}
+                            size="md"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Applies to all rolls on this bill
+                        </p>
                     </div>
 
                     <div className="space-y-2">

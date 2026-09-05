@@ -124,6 +124,7 @@ const PurchaseReport = () => {
       "Godown",
       "Transport",
       "Transport Charges",
+      "Discount",
       "Received By"
     ];
     const csvContent = [
@@ -137,6 +138,7 @@ const PurchaseReport = () => {
           `"${purchase.godown || ''}"`,
           `"${purchase.transport || ''}"`,
           purchase.transport_charges || 0,
+          purchase.discount || 0,
           `"${purchase.received_by || ''}"`,
         ].join(",");
       }),

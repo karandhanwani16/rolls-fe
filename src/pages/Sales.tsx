@@ -169,8 +169,9 @@ const Sales = () => {
                     <TableHead>Customer</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Outstanding</TableHead>
+                    <TableHead className="text-right">Overdue Days</TableHead>
                     <TableHead className="text-right">Description</TableHead>
-
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -191,6 +192,28 @@ const Sales = () => {
                             currency: "INR",
                             maximumFractionDigits: 0,
                           }).format(sale.total)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {sale.payment_status === "FULL" ? (
+                            <span className="text-green-600">Paid</span>
+                          ) : (
+                            new Intl.NumberFormat("en-IN", {
+                              style: "currency",
+                              currency: "INR",
+                              maximumFractionDigits: 0,
+                            }).format(sale.remaining_amount || sale.total)
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {sale.payment_status === "FULL" ? (
+                            "—"
+                          ) : (sale.overdue_days || 0) > 0 ? (
+                            <span className="text-red-600 font-medium">
+                              {sale.overdue_days} days
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
                         </TableCell>
                         <TableCell>{sale.description}</TableCell>
                         <TableCell className="text-right">
@@ -243,7 +266,7 @@ const Sales = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
+                      <TableCell colSpan={8} className="h-24 text-center">
                         No sales found.
                       </TableCell>
                     </TableRow>
@@ -288,6 +311,44 @@ const Sales = () => {
                       currency: "INR",
                       maximumFractionDigits: 2,
                     }).format(selectedSale.transport_charges || 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Discount</p>
+                  <p className="font-medium">
+                    {new Intl.NumberFormat("en-IN", {
+                      style: "currency",
+                      currency: "INR",
+                      maximumFractionDigits: 2,
+                    }).format(selectedSale.discount || 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Credit Days</p>
+                  <p className="font-medium">{selectedSale.credit_days ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Outstanding</p>
+                  <p className="font-medium">
+                    {selectedSale.payment_status === "FULL"
+                      ? "Fully Paid"
+                      : new Intl.NumberFormat("en-IN", {
+                          style: "currency",
+                          currency: "INR",
+                          maximumFractionDigits: 2,
+                        }).format(selectedSale.remaining_amount || selectedSale.total)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Overdue Days</p>
+                  <p
+                    className={`font-medium ${
+                      (selectedSale.overdue_days || 0) > 0 ? "text-red-600" : ""
+                    }`}
+                  >
+                    {selectedSale.payment_status === "FULL"
+                      ? "—"
+                      : `${selectedSale.overdue_days || 0} days`}
                   </p>
                 </div>
               </div>
