@@ -161,7 +161,7 @@ const Sales = () => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
             </div>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -171,7 +171,7 @@ const Sales = () => {
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">Outstanding</TableHead>
                     <TableHead className="text-right">Overdue Days</TableHead>
-                    <TableHead className="text-right">Description</TableHead>
+                    <TableHead>Description</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -179,21 +179,23 @@ const Sales = () => {
                   {filteredSales.length > 0 ? (
                     filteredSales.map((sale) => (
                       <TableRow key={sale.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium whitespace-nowrap">
                           {sale.sales_no}
                         </TableCell>
-                        <TableCell>{sale.customer_name}</TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {sale.customer_name}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
                           {format(new Date(sale.date), "dd MMM yyyy")}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right whitespace-nowrap">
                           {new Intl.NumberFormat("en-IN", {
                             style: "currency",
                             currency: "INR",
                             maximumFractionDigits: 0,
                           }).format(sale.total)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right whitespace-nowrap">
                           {sale.payment_status === "FULL" ? (
                             <span className="text-green-600">Paid</span>
                           ) : (
@@ -204,7 +206,7 @@ const Sales = () => {
                             }).format(sale.remaining_amount || sale.total)
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right whitespace-nowrap">
                           {sale.payment_status === "FULL" ? (
                             "—"
                           ) : (sale.overdue_days || 0) > 0 ? (
@@ -215,7 +217,9 @@ const Sales = () => {
                             <span className="text-muted-foreground">0</span>
                           )}
                         </TableCell>
-                        <TableCell>{sale.description}</TableCell>
+                        <TableCell className="max-w-[180px] truncate">
+                          {sale.description || "—"}
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end">
                             <DropdownMenu>
@@ -280,31 +284,39 @@ const Sales = () => {
 
       {/* View Sale Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Sale Details - {selectedSale?.sales_no}</DialogTitle>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 top-[5vh] translate-y-0 data-[state=open]:slide-in-from-top-[5%] data-[state=closed]:slide-out-to-top-[5%]">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0 pr-12">
+            <DialogTitle>
+              Sale Details — {selectedSale?.sales_no || ""}
+            </DialogTitle>
           </DialogHeader>
           {selectedSale && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500">Customer</p>
+                  <p className="text-sm text-muted-foreground">Customer</p>
                   <p className="font-medium">{selectedSale.customer_name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Date</p>
+                  <p className="text-sm text-muted-foreground">Date</p>
                   <p className="font-medium">
-                    {format(new Date(selectedSale.date), "dd MMMM yyyy")}
+                    {format(new Date(selectedSale.date), "dd MMM yyyy")}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Challan No</p>
+                  <p className="text-sm text-muted-foreground">Challan No</p>
                   <p className="font-medium">
-                    {selectedSale.challan_no || "-"}
+                    {selectedSale.challan_no || "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Transport Charges</p>
+                  <p className="text-sm text-muted-foreground">Unit</p>
+                  <p className="font-medium uppercase">
+                    {selectedSale.unit || selectedSale.items?.[0]?.unit || "m"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Transport</p>
                   <p className="font-medium">
                     {new Intl.NumberFormat("en-IN", {
                       style: "currency",
@@ -314,7 +326,7 @@ const Sales = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Discount</p>
+                  <p className="text-sm text-muted-foreground">Discount</p>
                   <p className="font-medium">
                     {new Intl.NumberFormat("en-IN", {
                       style: "currency",
@@ -324,23 +336,11 @@ const Sales = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Credit Days</p>
+                  <p className="text-sm text-muted-foreground">Credit Days</p>
                   <p className="font-medium">{selectedSale.credit_days ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Outstanding</p>
-                  <p className="font-medium">
-                    {selectedSale.payment_status === "FULL"
-                      ? "Fully Paid"
-                      : new Intl.NumberFormat("en-IN", {
-                          style: "currency",
-                          currency: "INR",
-                          maximumFractionDigits: 2,
-                        }).format(selectedSale.remaining_amount || selectedSale.total)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Overdue Days</p>
+                  <p className="text-sm text-muted-foreground">Overdue Days</p>
                   <p
                     className={`font-medium ${
                       (selectedSale.overdue_days || 0) > 0 ? "text-red-600" : ""
@@ -351,37 +351,63 @@ const Sales = () => {
                       : `${selectedSale.overdue_days || 0} days`}
                   </p>
                 </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Outstanding</p>
+                  <p className="font-medium">
+                    {selectedSale.payment_status === "FULL"
+                      ? "Fully Paid"
+                      : new Intl.NumberFormat("en-IN", {
+                          style: "currency",
+                          currency: "INR",
+                          maximumFractionDigits: 2,
+                        }).format(
+                          selectedSale.remaining_amount || selectedSale.total
+                        )}
+                  </p>
+                </div>
+                {selectedSale.description && (
+                  <div className="col-span-2 md:col-span-3">
+                    <p className="text-sm text-muted-foreground">Description</p>
+                    <p className="font-medium">{selectedSale.description}</p>
+                  </div>
+                )}
               </div>
 
               <div>
                 <h3 className="font-medium mb-2">Items</h3>
-                <div className="border rounded-md">
+                <div className="border rounded-md overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow>
+                      <TableRow className="bg-muted/50">
                         <TableHead>Product</TableHead>
                         <TableHead>Roll No</TableHead>
                         <TableHead>Shade</TableHead>
                         <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
+                        <TableHead className="text-right">Rate</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {selectedSale.items && selectedSale.items.length > 0 ? (
                         selectedSale.items.map((item: any) => (
-                          <TableRow key={item.id}>
-                            <TableCell>{item.product_name}</TableCell>
-                            <TableCell>{item.roll_no || "-"}</TableCell>
-                            <TableCell>{item.shade || "-"}</TableCell>
-                            <TableCell className="text-right">
-                              {item.meters.toFixed(2)} {item.unit || "m"}
+                          <TableRow key={item.id || `${item.product_id}-${item.roll_no}`}>
+                            <TableCell className="font-medium">
+                              {item.product_name}
                             </TableCell>
-                            <TableCell className="text-right">
-                              ₹{item.price.toFixed(2)}
+                            <TableCell>{item.roll_no || "—"}</TableCell>
+                            <TableCell>{item.shade || "—"}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">
+                              {(Number(item.meters) || 0).toFixed(2)}{" "}
+                              {item.unit || selectedSale.unit || "m"}
                             </TableCell>
-                            <TableCell className="text-right">
-                              ₹{(item.total_price ?? item.total)?.toFixed(2)}
+                            <TableCell className="text-right whitespace-nowrap">
+                              ₹{(Number(item.price) || 0).toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right whitespace-nowrap">
+                              ₹
+                              {(
+                                Number(item.total_price ?? item.total) || 0
+                              ).toFixed(2)}
                             </TableCell>
                           </TableRow>
                         ))
@@ -396,29 +422,21 @@ const Sales = () => {
                   </Table>
                 </div>
               </div>
-
-              <div className="flex justify-between items-center">
-                <div>
-                  {selectedSale.description && (
-                    <div>
-                      <p className="text-sm text-gray-500">Description</p>
-                      <p>{selectedSale.description}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500">Total Amount</p>
-                  <p className="text-xl font-bold">
-                    {new Intl.NumberFormat("en-IN", {
-                      style: "currency",
-                      currency: "INR",
-                      maximumFractionDigits: 0,
-                    }).format(selectedSale.total)}
-                  </p>
-                </div>
+            </div>
+          )}
+          {selectedSale && (
+            <div className="shrink-0 border-t px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-background">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Amount</p>
+                <p className="text-xl font-bold">
+                  {new Intl.NumberFormat("en-IN", {
+                    style: "currency",
+                    currency: "INR",
+                    maximumFractionDigits: 0,
+                  }).format(selectedSale.total)}
+                </p>
               </div>
-
-              <div className="flex justify-end mt-4 gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   onClick={() =>
