@@ -15,7 +15,7 @@ import { ArrowLeft, Save, Printer, FileText } from "lucide-react";
 import SalesDetails from "./SalesDetails";
 import SalesItems from "./SalesItems";
 import SalesActions from "./SalesActions";
-import { downloadSalePdf } from "@/lib/downloadSalePdf";
+import { printSaleDocument } from "@/lib/downloadSalePdf";
 import { DEFAULT_QUANTITY_UNIT, normalizeUnit } from "@/lib/quantityUnits";
 
 interface SalesItem {
@@ -626,21 +626,16 @@ const SalesForm = () => {
     try {
       toast.info(
         type === "challan"
-          ? "Generating challan PDF..."
-          : "Generating sales bill PDF..."
+          ? "Opening challan print dialog..."
+          : "Opening sales bill print dialog..."
       );
-      await downloadSalePdf(id, formData.sales_no, type);
-      toast.success(
-        type === "challan"
-          ? "Challan downloaded successfully"
-          : "Sales bill downloaded successfully"
-      );
+      await printSaleDocument(id, formData.sales_no, type);
     } catch (error) {
-      console.error("Error downloading document:", error);
+      console.error("Error printing document:", error);
       toast.error(
         type === "challan"
-          ? "Failed to download challan"
-          : "Failed to download sales bill"
+          ? "Failed to print challan"
+          : "Failed to print sales bill"
       );
     }
   };

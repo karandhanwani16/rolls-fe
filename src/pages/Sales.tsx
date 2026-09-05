@@ -38,7 +38,7 @@ import {
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { downloadSalePdf } from "@/lib/downloadSalePdf";
+import { printSaleDocument } from "@/lib/downloadSalePdf";
 
 const Sales = () => {
   const [sales, setSales] = useState<any[]>([]);
@@ -99,8 +99,8 @@ const Sales = () => {
     try {
       toast.info(
         type === "challan"
-          ? "Generating challan PDF..."
-          : "Generating sales bill PDF..."
+          ? "Opening challan print dialog..."
+          : "Opening sales bill print dialog..."
       );
 
       const sale = sales.find((s) => s.id === id) || selectedSale;
@@ -108,19 +108,13 @@ const Sales = () => {
         throw new Error("Sale not found");
       }
 
-      await downloadSalePdf(id, sale.sales_no, type);
-
-      toast.success(
-        type === "challan"
-          ? "Challan downloaded successfully"
-          : "Sales bill downloaded successfully"
-      );
+      await printSaleDocument(id, sale.sales_no, type);
     } catch (error) {
-      console.error("Error downloading document:", error);
+      console.error("Error printing document:", error);
       toast.error(
         type === "challan"
-          ? "Failed to download challan"
-          : "Failed to download sales bill"
+          ? "Failed to print challan"
+          : "Failed to print sales bill"
       );
     }
   };
