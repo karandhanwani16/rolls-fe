@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -83,7 +83,7 @@ const SalesForm = () => {
 
   // Fetch customers data (exclude Watav vendors — managed separately)
   const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
+    queryKey: ["customers", "for-sales"],
     queryFn: async () => {
       setLoading(true);
       const response = await customersAPI.getAll();
@@ -91,6 +91,30 @@ const SalesForm = () => {
       return getRegularCustomers(response || []);
     },
   });
+
+  // Fetch sale data if editing
+  const { data: sale } = useQuery({
+    queryKey: ["sale", id],
+    queryFn: () => salesAPI.getById(id!),
+    enabled: !!id,
+  });
+
+  // Keep the sale's current customer in the dropdown even if filtered out (e.g. legacy watav)
+  const customersForSelect = useMemo(() => {
+    const list = [...(customers || [])];
+    const currentId = formData.customer_id;
+    if (currentId && !list.some((c: any) => c.id === currentId)) {
+      if (sale?.customer?.id === currentId) {
+        list.unshift(sale.customer);
+      } else {
+        list.unshift({
+          id: currentId,
+          name: formData.customer_name || "Current customer",
+        });
+      }
+    }
+    return list;
+  }, [customers, formData.customer_id, formData.customer_name, sale]);
 
   // Fetch godowns data
   const { data: godowns = [] } = useQuery({
@@ -114,13 +138,6 @@ const SalesForm = () => {
     },
   });
 
-  // Fetch sale data if editing
-  const { data: sale } = useQuery({
-    queryKey: ["sale", id],
-    queryFn: () => salesAPI.getById(id!),
-    enabled: !!id,
-  });
-
   // Create/Update sale mutation
   const saleMutation = useMutation({
     mutationFn: (data: SalesFormData) => {
@@ -133,9 +150,13 @@ const SalesForm = () => {
       toast.success(`Sale ${id ? "updated" : "created"} successfully`);
       navigate("/sales");
     },
-    onError: (error) => {
+    onError: (error: any) => {
       setLoading(false);
-      toast.error(`Failed to ${id ? "update" : "create"} sale`);
+      const message =
+        error?.response?.data?.error ||
+        error?.message ||
+        `Failed to ${id ? "update" : "create"} sale`;
+      toast.error(message);
     },
   });
 
@@ -232,8 +253,8 @@ const SalesForm = () => {
             sales_date: response.date
               ? response.date.split("T")[0]
               : new Date().toISOString().split("T")[0],
-            customer_id: response.customer.id,
-            customer_name: response.customer.name,
+            customer_id: response.customer_id || response.customer?.id || "",
+            customer_name: response.customer_name || response.customer?.name || "",
             total_amount: response.total,
             description: response.description,
             godown_no: response.godown?.id || "",
@@ -327,6 +348,10 @@ const SalesForm = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.customer_id) {
+      toast.error("Please select a customer");
+      return;
+    }
     saleMutation.mutate(formData);
   };
 
@@ -700,7 +725,7 @@ const SalesForm = () => {
         <SalesDetails
           formData={formData}
           setFormData={setFormData}
-          customers={customers}
+          customers={customersForSelect}
           godowns={godowns}
         />
 
