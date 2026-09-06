@@ -141,16 +141,6 @@ const SalesDetails = ({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="challan_no">Challan No</Label>
-                        <Input
-                            id="challan_no"
-                            value={formData.challan_no}
-                            onChange={(e) => handleChange('challan_no', e.target.value)}
-                            placeholder="Enter challan number"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
                         <Label htmlFor="maker">Maker</Label>
                         <Input
                             id="maker"

@@ -298,12 +298,6 @@ const Sales = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Challan No</p>
-                  <p className="font-medium">
-                    {selectedSale.challan_no || "—"}
-                  </p>
-                </div>
-                <div>
                   <p className="text-sm text-muted-foreground">Unit</p>
                   <p className="font-medium uppercase">
                     {selectedSale.unit || selectedSale.items?.[0]?.unit || "m"}
