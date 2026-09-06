@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { CreditCard, Plus, Search, Edit, Trash2 } from "lucide-react";
 import { transactionsAPI } from "@/services/api";
 import { z } from "zod";
@@ -326,7 +327,13 @@ const Transactions = () => {
                     <FormItem>
                       <FormLabel>Amount</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" {...field} />
+                        <CurrencyInput
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -406,7 +413,13 @@ const Transactions = () => {
                     <FormItem>
                       <FormLabel>Amount</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" {...field} />
+                        <CurrencyInput
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

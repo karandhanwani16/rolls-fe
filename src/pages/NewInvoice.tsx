@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { 
   Select,
@@ -245,20 +246,16 @@ const NewInvoice = () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="number"
-                          min="1"
+                        <CurrencyInput
+                          allowDecimals={false}
                           value={item.quantity}
-                          onChange={(e) => updateItem(item.id, "quantity", parseInt(e.target.value) || 0)}
+                          onChange={(n) => updateItem(item.id, "quantity", n || 0)}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                        <CurrencyInput
                           value={item.rate}
-                          onChange={(e) => updateItem(item.id, "rate", parseFloat(e.target.value) || 0)}
+                          onChange={(n) => updateItem(item.id, "rate", n || 0)}
                           className="text-right"
                         />
                       </TableCell>

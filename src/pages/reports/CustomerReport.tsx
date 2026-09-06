@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { customersAPI } from "@/services/api";
+import { getRegularCustomers } from "@/lib/partyTypes";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Table,
@@ -75,7 +76,7 @@ const CustomerReport = () => {
     try {
       setLoading(true);
       const data = await customersAPI.getAll();
-      setCustomers(data);
+      setCustomers(getRegularCustomers(data || []));
     } catch (error) {
       console.error("Error fetching customers:", error);
       toast({

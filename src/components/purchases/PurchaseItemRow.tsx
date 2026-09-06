@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Select,
   SelectContent,
@@ -8,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import type { KeyboardEvent } from "react";
 import { DEFAULT_QUANTITY_UNIT, getUnitMeta } from "@/lib/quantityUnits";
 
 interface PurchaseItemRowProps {
@@ -22,7 +23,7 @@ interface PurchaseItemRowProps {
   createKeyDownHandler: (
     index: number,
     field: string
-  ) => (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  ) => (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
 }
 
 const PurchaseItemRow = ({
@@ -35,173 +36,106 @@ const PurchaseItemRow = ({
   setRef,
   createKeyDownHandler,
 }: PurchaseItemRowProps) => {
-  const [metersInput, setMetersInput] = useState(item.meters.toString());
-  const [priceInput, setPriceInput] = useState(item.price.toString());
-
   const handleKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
+    e: KeyboardEvent<HTMLInputElement>,
     field: string
   ) => {
     createKeyDownHandler(index, field)(e);
   };
 
-    const handleNumericChange = (value: string, field: "meters" | "price") => {
-      // If the value is empty or just a minus sign, keep it as is
-      if (value === "" || value === "-") {
-        if (field === "meters") {
-          setMetersInput(value);
-        } else {
-          setPriceInput(value);
-        }
-        handleItemChange(index, field, 0);
-        return;
-      }
-
-      // Try to parse the number
-      const numValue = parseFloat(value);
-      if (!isNaN(numValue)) {
-        if (field === "meters") {
-          setMetersInput(value);
-        } else {
-          setPriceInput(value);
-        }
-        handleItemChange(index, field, numValue);
-      }
-    };
-
-    const handleNumericBlur = (field: "meters" | "price") => {
-      const value = field === "meters" ? metersInput : priceInput;
-      if (value === "" || value === "-") {
-        if (field === "meters") {
-          setMetersInput("0");
-        } else {
-          setPriceInput("0");
-        }
-        handleItemChange(index, field, 0);
-      }
-    };
-
-    const handleNumericFocus = (field: "meters" | "price") => {
-      const value = field === "meters" ? metersInput : priceInput;
-      if (value === "0") {
-        if (field === "meters") {
-          setMetersInput("");
-        } else {
-          setPriceInput("");
-        }
-      }
-    };
-
-    useEffect(() => {
-      setPriceInput(item.price.toString());
-    }, [item.price]);
-
-    useEffect(() => {
-      setMetersInput(item.meters.toString());
-    }, [item.meters]);
-
-    return (
-      <tr className="hover:bg-gray-50">
-        <td className="px-6 py-4 whitespace-nowrap">
-          <Select
-            value={item.product_id}
-            onValueChange={(value) => handleProductChange(index, value)}
-          >
-            <SelectTrigger className="w-full focus:ring-brand-teal">
-              <SelectValue placeholder="Select product..." />
-            </SelectTrigger>
-            <SelectContent>
-              {products && Array.isArray(products) && products.length > 0 ? (
-                products.map((product) => (
-                  <SelectItem key={product.id} value={product.id}>
-                    {product.name}
-                  </SelectItem>
-                ))
-              ) : (
-                <SelectItem value="none" disabled>
-                  No products available
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-6 py-4 whitespace-nowrap">
+        <Select
+          value={item.product_id}
+          onValueChange={(value) => handleProductChange(index, value)}
+        >
+          <SelectTrigger className="w-full focus:ring-brand-teal">
+            <SelectValue placeholder="Select product..." />
+          </SelectTrigger>
+          <SelectContent>
+            {products && Array.isArray(products) && products.length > 0 ? (
+              products.map((product) => (
+                <SelectItem key={product.id} value={product.id}>
+                  {product.name}
                 </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <Input
-            ref={setRef("roll_no", index)}
-            value={item.roll_no}
-            onChange={(e) => handleItemChange(index, "roll_no", e.target.value)}
-            onKeyDown={(e) => handleKeyDown(e, "roll_no")}
-            placeholder="Enter roll number"
-            className="focus-visible:ring-brand-teal"
-            required
-          />
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <Input
-            ref={setRef("shade", index)}
-            value={item.shade || ""}
-            onChange={(e) => handleItemChange(index, "shade", e.target.value)}
-            onKeyDown={(e) => handleKeyDown(e, "shade")}
-            placeholder="Shade no."
-            className="focus-visible:ring-brand-teal"
-          />
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <div className="flex items-center gap-2">
-            <Input
-              ref={setRef("meters", index)}
-              type="text"
-              inputMode="decimal"
-              value={metersInput}
-              onChange={(e) => handleNumericChange(e.target.value, "meters")}
-              onBlur={() => handleNumericBlur("meters")}
-              onFocus={() => handleNumericFocus("meters")}
-              onKeyDown={(e) => handleKeyDown(e, "meters")}
-              placeholder="0.00"
-              className="focus-visible:ring-brand-teal min-w-[90px]"
-              required
-            />
-            <span className="text-sm text-muted-foreground min-w-[2rem]">
-              {getUnitMeta(item.unit || DEFAULT_QUANTITY_UNIT).abbr}
-            </span>
-          </div>
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <Input
-            ref={setRef("price", index)}
-            type="text"
-            inputMode="decimal"
-            value={priceInput}
-            onChange={(e) => handleNumericChange(e.target.value, "price")}
-            onBlur={() => handleNumericBlur("price")}
-            onFocus={() => handleNumericFocus("price")}
-            onKeyDown={(e) => handleKeyDown(e, "price")}
+              ))
+            ) : (
+              <SelectItem value="none" disabled>
+                No products available
+              </SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <Input
+          ref={setRef("roll_no", index)}
+          value={item.roll_no}
+          onChange={(e) => handleItemChange(index, "roll_no", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "roll_no")}
+          placeholder="Enter roll number"
+          className="focus-visible:ring-brand-teal"
+          required
+        />
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <Input
+          ref={setRef("shade", index)}
+          value={item.shade || ""}
+          onChange={(e) => handleItemChange(index, "shade", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "shade")}
+          placeholder="Shade no."
+          className="focus-visible:ring-brand-teal"
+        />
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <CurrencyInput
+            ref={setRef("meters", index)}
+            value={item.meters}
+            onChange={(n) => handleItemChange(index, "meters", n || 0)}
+            onKeyDown={(e) => handleKeyDown(e, "meters")}
             placeholder="0.00"
-            className="focus-visible:ring-brand-teal"
+            className="focus-visible:ring-brand-teal min-w-[90px]"
             required
           />
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <Input
-            type="number"
-            value={item?.total_price?.toFixed(2)}
-            readOnly
-            className="bg-gray-50 font-medium text-brand-teal"
-          />
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap text-right">
-          <Button
-            type="button"
-            onClick={() => removeItem(index)}
-            variant="ghost"
-            size="sm"
-            className="h-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </td>
-      </tr>
-    );
+          <span className="text-sm text-muted-foreground min-w-[2rem]">
+            {getUnitMeta(item.unit || DEFAULT_QUANTITY_UNIT).abbr}
+          </span>
+        </div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <CurrencyInput
+          ref={setRef("price", index)}
+          value={item.price}
+          onChange={(n) => handleItemChange(index, "price", n || 0)}
+          onKeyDown={(e) => handleKeyDown(e, "price")}
+          placeholder="0.00"
+          className="focus-visible:ring-brand-teal"
+          required
+        />
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <CurrencyInput
+          value={item?.total_price}
+          readOnly
+          className="bg-gray-50 font-medium text-brand-teal"
+        />
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-right">
+        <Button
+          type="button"
+          onClick={() => removeItem(index)}
+          variant="ghost"
+          size="sm"
+          className="h-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </td>
+    </tr>
+  );
 };
 
 export default PurchaseItemRow;

@@ -28,6 +28,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Package, Plus, Search, Edit, Trash } from "lucide-react";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { useToast } from "@/components/ui/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -412,11 +413,13 @@ const Products = () => {
                   <FormItem>
                     <FormLabel>Price</FormLabel>
                     <FormControl>
-                      <Input 
-                        {...field} 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="Enter price" 
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        placeholder="Enter price"
                       />
                     </FormControl>
                     <FormMessage />
@@ -509,11 +512,13 @@ const Products = () => {
                   <FormItem>
                     <FormLabel>Price</FormLabel>
                     <FormControl>
-                      <Input 
-                        {...field} 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="Enter price" 
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        placeholder="Enter price"
                       />
                     </FormControl>
                     <FormMessage />

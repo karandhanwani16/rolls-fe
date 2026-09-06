@@ -3,6 +3,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { billPaymentsAPI, customersAPI } from "@/services/api";
+import { getRegularCustomers } from "@/lib/partyTypes";
 import {
   Select,
   SelectContent,
@@ -75,7 +76,7 @@ const BillToBillPayment = () => {
   const fetchCustomers = async () => {
     try {
       const response = await customersAPI.getAll();
-      const customerOptions = response.map((customer: any) => ({
+      const customerOptions = getRegularCustomers(response || []).map((customer: any) => ({
         id: customer.id,
         name: customer.name,
       }));

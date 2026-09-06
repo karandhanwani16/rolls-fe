@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { customersAPI, paymentsInAPI } from "@/services/api";
+import { getWatavVendors } from "@/lib/partyTypes";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Table,
@@ -155,9 +156,7 @@ const WatavReport = () => {
     }
   };
 
-  const watavCustomers = customers.filter((c) => c.type === "watav");
-  const vendorList = watavCustomers.length > 0 ? watavCustomers : customers;
-
+  const vendorList = getWatavVendors(customers);
   const selectedWatavName =
     customers.find((c) => c.id === selectedWatav)?.name || "All Watav vendors";
 
@@ -381,7 +380,6 @@ const WatavReport = () => {
                         )}
                       />
                       {customer.name}
-                      {customer.type === "watav" ? " (Watav)" : ""}
                     </CommandItem>
                   ))}
                 </CommandGroup>

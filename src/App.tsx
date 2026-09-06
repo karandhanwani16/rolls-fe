@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Invoices from "./pages/Invoices";
 import NewInvoice from "./pages/NewInvoice";
 import Customers from "./pages/Customers";
+import WatavVendors from "./pages/WatavVendors";
 import Suppliers from "./pages/Suppliers";
 import Godowns from "./pages/Godowns";
 import Products from "./pages/Products";
@@ -102,6 +103,11 @@ const AppContent = () => {
           <Route path="/customers" element={
             <ProtectedRoute>
               <Customers />
+            </ProtectedRoute>
+          } />
+          <Route path="/watav-vendors" element={
+            <ProtectedRoute>
+              <WatavVendors />
             </ProtectedRoute>
           } />
           <Route path="/suppliers" element={

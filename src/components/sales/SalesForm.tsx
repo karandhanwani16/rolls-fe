@@ -17,6 +17,7 @@ import SalesItems from "./SalesItems";
 import SalesActions from "./SalesActions";
 import { printSaleDocument } from "@/lib/downloadSalePdf";
 import { DEFAULT_QUANTITY_UNIT, normalizeUnit } from "@/lib/quantityUnits";
+import { getRegularCustomers } from "@/lib/partyTypes";
 
 interface SalesItem {
   sales_item_id: string;
@@ -80,14 +81,14 @@ const SalesForm = () => {
     items: [],
   });
 
-  // Fetch customers data
+  // Fetch customers data (exclude Watav vendors — managed separately)
   const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
     queryFn: async () => {
       setLoading(true);
       const response = await customersAPI.getAll();
       setLoading(false);
-      return response;
+      return getRegularCustomers(response || []);
     },
   });
 

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { IndianRupee } from 'lucide-react';
 import { useFormSectionNavigation } from '@/lib/formKeyboardNavigation';
@@ -29,8 +30,7 @@ const SalesActions = ({
         0
     );
 
-    const handleTransportChange = (value: string) => {
-        const transport_charges = parseFloat(value) || 0;
+    const handleTransportChange = (transport_charges: number) => {
         setFormData((prev: any) => ({
             ...prev,
             transport_charges,
@@ -38,8 +38,7 @@ const SalesActions = ({
         }));
     };
 
-    const handleDiscountChange = (value: string) => {
-        const discount = parseFloat(value) || 0;
+    const handleDiscountChange = (discount: number) => {
         setFormData((prev: any) => ({
             ...prev,
             discount,
@@ -67,35 +66,28 @@ const SalesActions = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="items_total">Items Total (₹)</Label>
-                        <Input
+                        <CurrencyInput
                             id="items_total"
-                            type="number"
-                            value={itemsTotal.toFixed(2)}
+                            value={itemsTotal}
                             readOnly
                             className="bg-gray-50"
                         />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="transport_charges">Transport Charges (₹)</Label>
-                        <Input
+                        <CurrencyInput
                             id="transport_charges"
-                            type="number"
-                            min="0"
-                            step="0.01"
                             value={formData.transport_charges ?? 0}
-                            onChange={(e) => handleTransportChange(e.target.value)}
+                            onChange={handleTransportChange}
                             placeholder="0.00"
                         />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="discount">Discount (₹)</Label>
-                        <Input
+                        <CurrencyInput
                             id="discount"
-                            type="number"
-                            min="0"
-                            step="0.01"
                             value={formData.discount ?? 0}
-                            onChange={(e) => handleDiscountChange(e.target.value)}
+                            onChange={handleDiscountChange}
                             placeholder="0.00"
                         />
                     </div>
@@ -113,9 +105,8 @@ const SalesActions = ({
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="total_amount">Total Amount (₹)</Label>
-                        <Input
+                        <CurrencyInput
                             id="total_amount"
-                            type="number"
                             value={formData.total_amount}
                             readOnly
                             className="bg-gray-50 text-lg font-semibold"

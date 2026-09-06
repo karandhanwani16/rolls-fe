@@ -28,6 +28,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Users, Plus, Search, Mail, Phone, FileText, Edit, Trash, MapPin, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useForm } from "react-hook-form";
@@ -35,13 +36,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { customersAPI } from "@/services/api";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { getRegularCustomers } from "@/lib/partyTypes";
 
 type Customer = {
   id: string;
@@ -98,7 +93,7 @@ const Customers = () => {
       phone: "",
       description: "",
       city: "",
-      type: "",
+      type: "direct",
       opening_balance: 0,
       opening_balance_date: "",
       credit_days: 0,
@@ -112,7 +107,7 @@ const Customers = () => {
       phone: "",
       description: "",
       city: "",
-      type: "",
+      type: "direct",
       opening_balance: 0,
       opening_balance_date: "",
       credit_days: 0,
@@ -132,7 +127,7 @@ const Customers = () => {
         phone: selectedCustomer.phone,
         description: selectedCustomer.description,
         city: selectedCustomer.city,
-        type: selectedCustomer.type,
+        type: "direct",
         opening_balance: selectedCustomer.opening_balance ?? 0,
         opening_balance_date: selectedCustomer.opening_balance_date
           ? selectedCustomer.opening_balance_date.slice(0, 10)
@@ -155,9 +150,11 @@ const Customers = () => {
         const data = response.data || response;
 
 
-        return data.map((customer: Customer) => ({
-          ...customer
-        }));
+        return getRegularCustomers(
+          data.map((customer: Customer) => ({
+            ...customer,
+          }))
+        );
       } catch (error: any) {
         console.error("Error fetching customers:", error);
         throw new Error(error.response?.data?.message || error.message || "Failed to fetch customers");
@@ -210,7 +207,7 @@ const Customers = () => {
         customer_phone: values.phone,
         customer_description: values.description,
         customer_city: values.city,
-        customer_type: values.type,
+        customer_type: values.type || "direct",
         opening_balance: values.opening_balance,
         opening_balance_date: values.opening_balance_date || null,
         credit_days: values.credit_days || 0,
@@ -250,7 +247,7 @@ const Customers = () => {
         customer_phone: values.phone,
         customer_description: values.description,
         customer_city: values.city,
-        customer_type: values.type,
+        customer_type: values.type || "direct",
         opening_balance: values.opening_balance,
         opening_balance_date: values.opening_balance_date || null,
         credit_days: values.credit_days || 0,
@@ -336,7 +333,6 @@ const Customers = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>City</TableHead>
                   <TableHead>Opening Balance</TableHead>
@@ -348,7 +344,7 @@ const Customers = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Loading customers...
                     </TableCell>
                   </TableRow>
@@ -356,7 +352,6 @@ const Customers = () => {
                   filteredCustomers.map((customer) => (
                     <TableRow key={customer.id}>
                       <TableCell className="font-medium">{customer.name}</TableCell>
-                      <TableCell className="capitalize">{customer.type || "N/A"}</TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           {customer.phone && (
@@ -421,7 +416,7 @@ const Customers = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       No customers found.
                     </TableCell>
                   </TableRow>
@@ -448,30 +443,6 @@ const Customers = () => {
                     <FormControl>
                       <Input {...field} placeholder="Enter customer name" />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer Type</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value || ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select customer type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="direct">Direct</SelectItem>
-                        <SelectItem value="watav">Watav</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -509,10 +480,12 @@ const Customers = () => {
                   <FormItem>
                     <FormLabel>Opening Balance (₹)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        {...field}
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
                         placeholder="0"
                       />
                     </FormControl>
@@ -620,30 +593,6 @@ const Customers = () => {
               />
               <FormField
                 control={editForm.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer Type</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select customer type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="direct">Direct</SelectItem>
-                        <SelectItem value="watav">Watav</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
@@ -675,10 +624,12 @@ const Customers = () => {
                   <FormItem>
                     <FormLabel>Opening Balance (₹)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        {...field}
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
                         placeholder="0"
                       />
                     </FormControl>

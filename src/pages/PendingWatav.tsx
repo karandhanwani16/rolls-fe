@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { customersAPI, paymentsInAPI } from "@/services/api";
+import { getRegularCustomers, getWatavVendors } from "@/lib/partyTypes";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Table,
@@ -118,13 +119,10 @@ const PendingWatav = () => {
     }
   };
 
-  const watavVendors = useMemo(() => {
-    const typed = customers.filter((c) => c.type === "watav");
-    return typed.length > 0 ? typed : customers;
-  }, [customers]);
+  const watavVendors = useMemo(() => getWatavVendors(customers), [customers]);
 
   const payingCustomers = useMemo(
-    () => customers.filter((c) => c.type !== "watav"),
+    () => getRegularCustomers(customers),
     [customers]
   );
 
@@ -567,6 +565,8 @@ const PendingWatav = () => {
                   <TableHead>Customer</TableHead>
                   <TableHead>Entry</TableHead>
                   <TableHead className="text-right">Gross</TableHead>
+                  <TableHead className="text-right">Discount</TableHead>
+                  <TableHead className="text-right">Settles</TableHead>
                   <TableHead className="text-right">Charges</TableHead>
                   <TableHead className="text-right">Net</TableHead>
                   <TableHead>Notes</TableHead>
@@ -597,6 +597,14 @@ const PendingWatav = () => {
                       <TableCell className="text-right">
                         {formatAmount(item.receivedAmount)}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {(item.discount || 0) > 0 ? formatAmount(item.discount) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {item.entryType === "STANDALONE"
+                          ? "—"
+                          : formatAmount(item.customerSettled ?? item.receivedAmount + (item.discount || 0))}
+                      </TableCell>
                       <TableCell className="text-right text-amber-700">
                         {formatAmount(item.vendorCharges)}
                       </TableCell>
@@ -610,7 +618,7 @@ const PendingWatav = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                       No pending Watav entries match these filters
                     </TableCell>
                   </TableRow>

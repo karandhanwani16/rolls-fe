@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -113,10 +114,9 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                                 Total Amount
                             </span>
                         </Label>
-                        <Input
+                        <CurrencyInput
                             id="total_amount"
-                            type="number"
-                            value={formData?.total_amount?.toFixed(2)}
+                            value={formData?.total_amount}
                             readOnly
                             className="bg-gray-50 font-medium text-brand-teal"
                         />
@@ -190,14 +190,10 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                                 Transport Charges
                             </span>
                         </Label>
-                        <Input
+                        <CurrencyInput
                             id="transport_charges"
-                            type="number"
-                            min="0"
-                            step="0.01"
                             value={formData.transport_charges ?? 0}
-                            onChange={(e) => {
-                                const transport_charges = parseFloat(e.target.value) || 0;
+                            onChange={(transport_charges) => {
                                 const itemsTotal = (formData.items || []).reduce(
                                     (sum: number, item: any) =>
                                         sum + (item.total_price || item.meters * item.price || 0),
@@ -224,14 +220,10 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                                 Discount
                             </span>
                         </Label>
-                        <Input
+                        <CurrencyInput
                             id="discount"
-                            type="number"
-                            min="0"
-                            step="0.01"
                             value={formData.discount ?? 0}
-                            onChange={(e) => {
-                                const discount = parseFloat(e.target.value) || 0;
+                            onChange={(discount) => {
                                 const itemsTotal = (formData.items || []).reduce(
                                     (sum: number, item: any) =>
                                         sum + (item.total_price || item.meters * item.price || 0),

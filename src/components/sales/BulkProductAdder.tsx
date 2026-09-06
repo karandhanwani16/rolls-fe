@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -70,29 +70,16 @@ const BulkProductAdder = ({ products, onAddBulk }: BulkProductAdderProps) => {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="rollCount">Number of Rolls</Label>
-            <Input
+            <CurrencyInput
               id="rollCount"
-              type="number"
-              min="1"
-              value={rollCount === 0 ? "" : rollCount.toString()}
-              onFocus={() => {
-                if (rollCount === 1) setRollCount(0); // Show empty if it's the default
-              }}
+              allowDecimals={false}
+              value={rollCount}
               onBlur={() => {
                 if (!rollCount || rollCount < 1) {
                   setRollCount(1);
                 }
               }}
-              onChange={(e) => {
-                const value = e.target.value;
-                // Allow empty input (user clearing input)
-                if (value === "") {
-                  setRollCount(0);
-                } else {
-                  const num = parseInt(value);
-                  setRollCount(isNaN(num) ? 0 : num);
-                }
-              }}
+              onChange={(n) => setRollCount(n < 1 ? 0 : n)}
             />
           </div>
         </div>
@@ -114,4 +101,4 @@ const BulkProductAdder = ({ products, onAddBulk }: BulkProductAdderProps) => {
   );
 };
 
-export default BulkProductAdder; 
+export default BulkProductAdder;

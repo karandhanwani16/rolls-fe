@@ -37,8 +37,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { CreditCard, Plus, Search, Edit, Trash2 } from "lucide-react";
 import { paymentsInAPI, customersAPI } from "@/services/api";
+import { getRegularCustomers, getWatavVendors } from "@/lib/partyTypes";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -62,6 +64,7 @@ const paymentInSchema = z
     received_amount: z.coerce.number().min(0.01, "Gross amount is required"),
     actual_amount: z.coerce.number().min(0).optional(),
     charges: z.coerce.number().min(0).optional().nullable(),
+    discount: z.coerce.number().min(0).optional().nullable(),
     type: z.string().min(1, "Payment instrument is required"),
     description: z.string().optional().nullable(),
     payment_date: z.date(),
@@ -105,6 +108,7 @@ const defaultFormValues: PaymentInFormValues = {
   received_amount: 0,
   actual_amount: 0,
   charges: 0,
+  discount: 0,
   type: "",
   description: "",
   payment_date: new Date(),
@@ -142,11 +146,16 @@ const PaymentsIn = () => {
   });
 
   const watavVendors = useMemo(
-    () => (customersData || []).filter((c: any) => c.type === "watav"),
+    () => getWatavVendors(customersData || []),
     [customersData]
   );
 
-  const vendorOptions = watavVendors.length > 0 ? watavVendors : customersData || [];
+  const regularCustomers = useMemo(
+    () => getRegularCustomers(customersData || []),
+    [customersData]
+  );
+
+  const vendorOptions = watavVendors;
 
   const addPaymentInMutation = useMutation({
     mutationFn: (data: PaymentInFormValues) => paymentsInAPI.create(toApiPayload(data)),
@@ -238,6 +247,7 @@ const PaymentsIn = () => {
       received_amount: payment.received_amount,
       actual_amount: payment.actual_amount,
       charges: payment.charges || 0,
+      discount: payment.discount || 0,
       type: payment.type,
       description: payment.description || "",
       payment_date: payment.payment_date ? new Date(payment.payment_date) : new Date(),
@@ -290,7 +300,9 @@ const PaymentsIn = () => {
                   <TableHead>Category</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Watav Vendor</TableHead>
-                  <TableHead>Gross</TableHead>
+                  <TableHead>Received</TableHead>
+                  <TableHead>Discount</TableHead>
+                  <TableHead>Settles</TableHead>
                   <TableHead>Charges</TableHead>
                   <TableHead>Net</TableHead>
                   <TableHead>Collection</TableHead>
@@ -302,7 +314,7 @@ const PaymentsIn = () => {
               <TableBody>
                 {isLoadingPaymentsIn ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-24 text-center">
+                    <TableCell colSpan={12} className="h-24 text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
@@ -312,6 +324,10 @@ const PaymentsIn = () => {
                     const isVatav = category === "VATAV";
                     const isStandalone =
                       payment.entry_type === "STANDALONE" || (isVatav && !payment.actual_id);
+                    const discount = payment.discount || 0;
+                    const settles = isStandalone
+                      ? 0
+                      : (payment.received_amount || 0) + discount;
                     return (
                       <TableRow key={payment.id}>
                         <TableCell>
@@ -337,6 +353,12 @@ const PaymentsIn = () => {
                             : "—"}
                         </TableCell>
                         <TableCell>{formatCurrency(payment.received_amount)}</TableCell>
+                        <TableCell>
+                          {discount > 0 ? formatCurrency(discount) : "—"}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {isStandalone ? "—" : formatCurrency(settles)}
+                        </TableCell>
                         <TableCell>
                           {isVatav ? formatCurrency(payment.charges || 0) : "—"}
                         </TableCell>
@@ -385,7 +407,7 @@ const PaymentsIn = () => {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-24 text-center">
+                    <TableCell colSpan={12} className="h-24 text-center">
                       No payments found.
                     </TableCell>
                   </TableRow>
@@ -403,7 +425,7 @@ const PaymentsIn = () => {
         form={addForm}
         onSubmit={(data) => addPaymentInMutation.mutate(data)}
         isPending={addPaymentInMutation.isPending}
-        customersData={customersData}
+        customersData={regularCustomers}
         vendorOptions={vendorOptions}
         isLoadingCustomers={isLoadingCustomers}
         submitLabel="Save"
@@ -418,7 +440,7 @@ const PaymentsIn = () => {
           updatePaymentInMutation.mutate({ id: currentPaymentIn.id, data })
         }
         isPending={updatePaymentInMutation.isPending}
-        customersData={customersData}
+        customersData={regularCustomers}
         vendorOptions={vendorOptions}
         isLoadingCustomers={isLoadingCustomers}
         submitLabel="Save Changes"
@@ -448,6 +470,7 @@ function toApiPayload(data: PaymentInFormValues) {
     actual_id: isStandalone ? null : data.actual_id,
     received_amount: data.received_amount,
     charges: isVatav ? data.charges || 0 : 0,
+    discount: isStandalone ? 0 : data.discount || 0,
     type: data.type,
     description: data.description || "",
     payment_date: data.payment_date,
@@ -518,8 +541,11 @@ function PaymentFormDialog({
   const category = form.watch("payment_category");
   const entryType = form.watch("entry_type");
   const collectionStatus = form.watch("collection_status");
+  const receivedAmount = Number(form.watch("received_amount")) || 0;
+  const discountAmount = Number(form.watch("discount")) || 0;
   const isVatav = category === "VATAV";
   const isStandalone = isVatav && entryType === "STANDALONE";
+  const settlesCustomer = !isStandalone ? receivedAmount + discountAmount : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -572,6 +598,7 @@ function PaymentFormDialog({
                             field.onChange(v);
                             if (v === "STANDALONE") {
                               form.setValue("actual_id", "");
+                              form.setValue("discount", 0);
                             }
                           }}
                           className="w-full"
@@ -646,12 +673,11 @@ function PaymentFormDialog({
                                 vendorOptions.map((customer: any) => (
                                   <SelectItem key={customer.id} value={customer.id}>
                                     {customer.name}
-                                    {customer.type === "watav" ? " (Watav)" : ""}
                                   </SelectItem>
                                 ))
                               ) : (
                                 <SelectItem value="no-vendors" disabled>
-                                  No vendors found
+                                  No Watav vendors — add them under Watav Vendors
                                 </SelectItem>
                               )}
                             </SelectContent>
@@ -708,32 +734,42 @@ function PaymentFormDialog({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>
-                            {isVatav ? "Gross Amount" : "Amount"}{" "}
+                            {isVatav ? "Gross Amount" : "Amount Received"}{" "}
                             <span className="text-red-500">*</span>
                           </FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} />
+                            <CurrencyInput
+                              value={field.value}
+                              onChange={field.onChange}
+                              onBlur={field.onBlur}
+                              name={field.name}
+                              ref={field.ref}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
 
-                    {isVatav && (
+                    {!isStandalone && (
                       <FormField
                         control={form.control}
-                        name="charges"
+                        name="discount"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Vendor Charges</FormLabel>
+                            <FormLabel>Discount</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                {...field}
+                              <CurrencyInput
                                 value={field.value ?? 0}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
                               />
                             </FormControl>
+                            <FormDescription>
+                              Extra amount settled on customer books
+                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -741,23 +777,69 @@ function PaymentFormDialog({
                     )}
                   </div>
 
+                  {!isStandalone && (
+                    <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                      <div className="text-muted-foreground">Settles on customer account</div>
+                      <div className="font-semibold text-base">
+                        {new Intl.NumberFormat("en-IN", {
+                          style: "currency",
+                          currency: "INR",
+                          maximumFractionDigits: 0,
+                        }).format(settlesCustomer)}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Received {receivedAmount.toLocaleString("en-IN")} + Discount{" "}
+                        {discountAmount.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                  )}
+
                   {isVatav && (
-                    <FormField
-                      control={form.control}
-                      name="actual_amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Net Amount</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" {...field} readOnly />
-                          </FormControl>
-                          <FormDescription>
-                            Automatically calculated as Gross − Vendor Charges
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="charges"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Vendor Charges</FormLabel>
+                            <FormControl>
+                              <CurrencyInput
+                                value={field.value ?? 0}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="actual_amount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Net Amount (from vendor)</FormLabel>
+                            <FormControl>
+                              <CurrencyInput
+                                value={field.value}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                                readOnly
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Gross − Vendor Charges (discount does not affect this)
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
                   )}
                 </div>
 

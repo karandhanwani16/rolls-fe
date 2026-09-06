@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import {
   Select,
   SelectContent,
@@ -237,11 +238,10 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center gap-2">
-          <Input
-            type="number"
+          <CurrencyInput
             ref={metersEditable ? setRef('meters', index) : undefined}
             value={item.meters || ''}
-            onChange={(e) => handleItemChange(index, 'meters', parseFloat(e.target.value) || 0)}
+            onChange={(n) => handleItemChange(index, 'meters', n || 0)}
             onKeyDown={metersEditable ? (e) => handleKeyDown(e, 'meters') : undefined}
             placeholder="Qty"
             readOnly={!metersEditable}
@@ -253,18 +253,16 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
         </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <Input
-          type="number"
+        <CurrencyInput
           ref={setRef('price', index)}
           value={item.price || ''}
-          onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)}
+          onChange={(n) => handleItemChange(index, 'price', n || 0)}
           onKeyDown={(e) => handleKeyDown(e, 'price')}
           placeholder="Price/Meter"
         />
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <Input
-          type="number"
+        <CurrencyInput
           value={item.total_price || ''}
           readOnly
           className="bg-gray-50"

@@ -12,6 +12,7 @@ import {
   salesAPI,
   purchasesAPI,
 } from "@/services/api";
+import { getRegularCustomers } from "@/lib/partyTypes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Save } from "lucide-react";
@@ -113,7 +114,12 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
 
   const { data: parties = [] } = useQuery({
     queryKey: [isSales ? "customers" : "suppliers"],
-    queryFn: () => (isSales ? customersAPI.getAll() : suppliersAPI.getAll()),
+    queryFn: async () => {
+      if (isSales) {
+        return getRegularCustomers((await customersAPI.getAll()) || []);
+      }
+      return suppliersAPI.getAll();
+    },
   });
 
   const { data: products = [] } = useQuery({

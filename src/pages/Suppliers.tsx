@@ -28,6 +28,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { FileText, Plus, Search, Phone, MapPin, Edit, Trash, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useForm } from "react-hook-form";
@@ -451,10 +452,12 @@ const Suppliers = () => {
                   <FormItem>
                     <FormLabel>Opening Balance (₹)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        {...field}
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
                         placeholder="0"
                       />
                     </FormControl>
@@ -574,10 +577,12 @@ const Suppliers = () => {
                   <FormItem>
                     <FormLabel>Opening Balance (₹)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        {...field}
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
                         placeholder="0"
                       />
                     </FormControl>

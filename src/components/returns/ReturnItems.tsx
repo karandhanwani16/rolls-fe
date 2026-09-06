@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Select,
   SelectContent,
@@ -194,18 +195,11 @@ const ReturnItems = ({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
+                          <CurrencyInput
                             ref={setRef("meters", index)}
                             value={item.meters ?? 0}
-                            onChange={(e) =>
-                              handleItemChange(
-                                index,
-                                "meters",
-                                parseFloat(e.target.value) || 0
-                              )
+                            onChange={(n) =>
+                              handleItemChange(index, "meters", n || 0)
                             }
                             onKeyDown={createKeyDownHandler(index, "meters")}
                             placeholder="0"
@@ -218,26 +212,18 @@ const ReturnItems = ({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                        <CurrencyInput
                           ref={setRef("price", index)}
                           value={item.price ?? 0}
-                          onChange={(e) =>
-                            handleItemChange(
-                              index,
-                              "price",
-                              parseFloat(e.target.value) || 0
-                            )
+                          onChange={(n) =>
+                            handleItemChange(index, "price", n || 0)
                           }
                           onKeyDown={createKeyDownHandler(index, "price")}
                         />
                       </td>
                       <td className="px-4 py-3">
-                        <Input
-                          type="number"
-                          value={(item.total_price || 0).toFixed(2)}
+                        <CurrencyInput
+                          value={item.total_price || 0}
                           readOnly
                           className="bg-gray-50"
                         />
