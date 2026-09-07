@@ -237,6 +237,17 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
         />
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
+        <Input
+          type="text"
+          ref={setRef('width', index)}
+          value={item.width || ''}
+          onChange={(e) => handleItemChange(index, 'width', e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, 'width')}
+          placeholder="Width"
+          className="min-w-[80px]"
+        />
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center gap-2">
           <CurrencyInput
             ref={metersEditable ? setRef('meters', index) : undefined}

@@ -24,6 +24,7 @@ interface PurchaseItem {
   product_name: string;
   roll_no: string;
   shade?: string;
+  width?: string;
   meters: number;
   unit?: string;
   price: number;
@@ -135,6 +136,8 @@ const PurchaseForm = () => {
         setLoading(false);
         const items = response.items.map((item: PurchaseItem) => ({
           ...item,
+          shade: item.shade || "",
+          width: item.width || "",
           total_price: parseFloat((item.meters * item.price).toFixed(2)),
         }));
 
@@ -206,16 +209,23 @@ const PurchaseForm = () => {
   ) => {
     const newItems = [...formData.items];
 
-    if (field === "price") {
-      // If price is being changed, update all items with the same product_id
+    if (field === "price" || field === "width") {
+      // Price and width are shared across all rolls of the same product
       const currentItem = newItems[index];
       newItems.forEach((item, idx) => {
         if (item.product_id === currentItem.product_id) {
-          newItems[idx] = {
-            ...item,
-            price: value,
-            total_price: parseFloat((item.meters * value).toFixed(2)),
-          };
+          if (field === "price") {
+            newItems[idx] = {
+              ...item,
+              price: value,
+              total_price: parseFloat((item.meters * value).toFixed(2)),
+            };
+          } else {
+            newItems[idx] = {
+              ...item,
+              width: value,
+            };
+          }
         }
       });
     } else {
@@ -234,12 +244,17 @@ const PurchaseForm = () => {
 
   const handleProductChange = (index: number, productId: string) => {
     const product = products.find((p) => p.id === productId);
+    const existingSameProduct = formData.items.find(
+      (item, idx) => idx !== index && item.product_id === productId
+    );
 
-    if (product.price) {
-      formData.items[index].price = parseFloat(product.price.toFixed(2));
+    if (product?.price != null) {
+      formData.items[index].price = parseFloat(Number(product.price).toFixed(2));
     }
     formData.items[index].product_id = product?.id || "";
     formData.items[index].product_name = product?.name || "";
+    formData.items[index].width =
+      existingSameProduct?.width || product?.width || "";
     setFormData({
       ...formData,
       items: formData.items,
@@ -258,6 +273,7 @@ const PurchaseForm = () => {
           product_name: "",
           roll_no: "",
           shade: "",
+          width: "",
           meters: 0,
           unit: formData.unit || DEFAULT_QUANTITY_UNIT,
           price: 0,
@@ -292,6 +308,10 @@ const PurchaseForm = () => {
         product_name: product.name,
         roll_no: "",
         shade: "",
+        width:
+          formData.items.find((item) => item.product_id === product.id)?.width ||
+          product.width ||
+          "",
         meters: 0,
         unit: formData.unit || DEFAULT_QUANTITY_UNIT,
         price: product.price || 0,

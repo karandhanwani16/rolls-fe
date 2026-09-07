@@ -15,8 +15,7 @@ import { format } from "date-fns";
 import { Loader2, Download, FileText, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { jsPDF } from "jspdf";
-import autoTable from 'jspdf-autotable';
+import { downloadReportPdf, formatPdfAmount, formatPdfDate, formatPdfPeriod } from "@/lib/reportPdf";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -157,118 +156,46 @@ const SalesReport = () => {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 15;
-    const contentWidth = pageWidth - (2 * margin);
-
-    // Set default font for entire document
-    doc.setFont("helvetica");
-
-    // Add company header
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("T. A. TEX", pageWidth / 2, 15, { align: "center" });
-
-    // Add report title
-    doc.setFontSize(14);
-    doc.text("Sales Report", pageWidth / 2, 25, { align: "center" });
-
-    // Add customer details
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
     const selectedCustomerNames = selectedCustomers.length > 0
-      ? customers
-          .filter(c => selectedCustomers.includes(c.id))
-          .map(c => c.name)
-          .join(", ")
+      ? customers.filter(c => selectedCustomers.includes(c.id)).map(c => c.name).join(", ")
       : "All Customers";
-    doc.text(`Customers: ${selectedCustomerNames}`, margin, 35);
-
-    // Add date range
-    doc.text(`Period: ${format(new Date(startDate), 'dd/MM/yyyy')} to ${format(new Date(endDate), 'dd/MM/yyyy')}`, margin, 42);
-
-    // Add summary section
     const totalAmount = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-    
-    doc.setFont("helvetica", "bold");
-    doc.text("Summary", margin, 52);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Total Sales: ₹${formatAmount(totalAmount)}`, margin, 59);
-    doc.text(`Number of Sales: ${filteredSales.length}`, margin, 66);
+    const totalOutstanding = filteredSales.reduce((sum, sale) => sum + (sale.remaining_amount ?? sale.total), 0);
 
-    // Add sales table
-    autoTable(doc, {
-      startY: 75,
-      head: [["Sales No", "Customer", "Date", "Total", "Outstanding", "Overdue", "Credit"]],
-      body: filteredSales.map((sale) => [
-        sale.sales_no,
-        sale.customer_name,
-        format(new Date(sale.date), "dd/MM/yyyy"),
-        `₹${formatAmount(sale.total)}`,
-        `₹${formatAmount(sale.remaining_amount ?? sale.total)}`,
+    downloadReportPdf({
+      title: "Sales Report",
+      filename: `sales_report_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`,
+      orientation: "landscape",
+      meta: [
+        { label: "Customers", value: selectedCustomerNames },
+        { label: "Period", value: formatPdfPeriod(startDate, endDate) },
+        { label: "Bills", value: String(filteredSales.length) },
+      ],
+      summary: [
+        { label: "Total Sales", value: formatPdfAmount(totalAmount) },
+        { label: "Number of Sales", value: String(filteredSales.length) },
+        { label: "Outstanding", value: formatPdfAmount(totalOutstanding), emphasize: true },
+      ],
+      columns: [
+        { header: "Sales No", width: 28, align: "center" },
+        { header: "Customer", align: "left" },
+        { header: "Date", width: 26, align: "center" },
+        { header: "Total", width: 34, align: "right" },
+        { header: "Outstanding", width: 34, align: "right" },
+        { header: "Overdue", width: 22, align: "center" },
+        { header: "Credit Days", width: 24, align: "center" },
+      ],
+      rows: filteredSales.map((sale) => [
+        sale.sales_no || "—",
+        sale.customer_name || "—",
+        formatPdfDate(sale.date),
+        formatPdfAmount(sale.total, { prefix: false }),
+        formatPdfAmount(sale.remaining_amount ?? sale.total, { prefix: false }),
         String(sale.overdue_days || 0),
         String(sale.credit_days || 0),
       ]),
-      styles: {
-        fontSize: 9,
-        cellPadding: 4,
-        overflow: 'linebreak',
-        cellWidth: 'wrap',
-        font: 'helvetica',
-        fontStyle: 'normal',
-        lineColor: [200, 200, 200],
-        lineWidth: 0.1,
-      },
-      headStyles: {
-        fillColor: [41, 128, 185],
-        textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 9,
-        font: 'helvetica',
-        halign: 'center',
-        valign: 'middle',
-        cellPadding: 5,
-      },
-      alternateRowStyles: {
-        fillColor: [245, 245, 245],
-        font: 'helvetica',
-        fontStyle: 'normal',
-      },
-      columnStyles: {
-        0: { cellWidth: 20, halign: 'center' },
-        1: { cellWidth: 'auto', halign: 'left' },
-        2: { cellWidth: 25, halign: 'center' },
-        3: { cellWidth: 30, halign: 'right' },
-        4: { cellWidth: 25, halign: 'center' },
-        5: { cellWidth: 25, halign: 'center' }
-      },
-      margin: { left: margin, right: margin },
-      tableWidth: 'auto',
-      theme: 'grid',
-      didDrawPage: function(data) {
-        // Add page number
-        doc.setFontSize(8);
-        doc.setTextColor(100);
-        doc.setFont("helvetica", "normal");
-        doc.text(
-          `Page ${data.pageNumber}`,
-          pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 10,
-          { align: "center" }
-        );
-        doc.text(
-          `Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
-          pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 5,
-          { align: "center" }
-        );
-      }
+      foot: ["", "Total", "", formatPdfAmount(totalAmount, { prefix: false }), formatPdfAmount(totalOutstanding, { prefix: false }), "", ""],
     });
-
-    // Generate filename with date range
-    const filename = `sales_report_${format(new Date(startDate), 'yyyyMMdd')}_to_${format(new Date(endDate), 'yyyyMMdd')}.pdf`;
-    doc.save(filename);
   };
 
   const filteredCustomers = customers.filter(customer =>

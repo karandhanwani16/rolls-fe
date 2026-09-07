@@ -46,7 +46,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import html2pdf from 'html2pdf.js';
+import { downloadReportPdf } from "@/lib/reportPdf";
 
 interface Customer {
   id: string;
@@ -138,68 +138,40 @@ const StockReport = () => {
 
     try {
       if (format === 'pdf') {
-        // Create HTML content for PDF
-        const html = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-              th { background-color: #f2f2f2; }
-              .header { text-align: center; font-size: 24px; margin-bottom: 20px; }
-              .date-range { text-align: center; margin-bottom: 20px; }
-            </style>
-          </head>
-          <body>
-            <div class="header">Stock Report</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Sr. No.</th>
-                  <th>Product Name</th>
-                  <th>Roll No.</th>
-                  <th>Shade</th>
-                  <th>Quantity</th>
-                  <th>Godown</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${stockData.map((item, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>${item.product_name}</td>
-                    <td>${item.roll_no}</td>
-                    <td>${item.shade || '-'}</td>
-                    <td>${item.meters} ${item.unit || 'm'}</td>
-                    <td>${item.godown}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </body>
-          </html>
-        `;
+        const productLabel = selectedProducts.length > 0
+          ? selectedProducts.map((p) => p.name).join(", ")
+          : "All Products";
+        const rows = (filteredStockData.length ? filteredStockData : stockData);
 
-        // Create a temporary div to hold the HTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        document.body.appendChild(tempDiv);
-
-        // Generate PDF
-        const options = {
-          margin: 10,
-          filename: `stock-report-${formatDate(new Date(), 'yyyy-MM-dd')}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2 },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        await html2pdf().set(options).from(tempDiv).save();
-
-        // Clean up
-        document.body.removeChild(tempDiv);
+        downloadReportPdf({
+          title: "Stock Report",
+          filename: `stock-report-${formatDate(new Date(), "yyyy-MM-dd")}.pdf`,
+          orientation: "landscape",
+          meta: [
+            { label: "Products", value: productLabel },
+            { label: "As of", value: formatDate(new Date(), "dd/MM/yyyy") },
+            { label: "Rolls", value: String(rows.length) },
+          ],
+          summary: [
+            { label: "Total Rolls", value: String(rows.length), emphasize: true },
+          ],
+          columns: [
+            { header: "Sr.", width: 16, align: "center" },
+            { header: "Product Name", align: "left" },
+            { header: "Roll No.", width: 32, align: "center" },
+            { header: "Shade", width: 32 },
+            { header: "Quantity", width: 32, align: "right" },
+            { header: "Godown", width: 40 },
+          ],
+          rows: rows.map((item, index) => [
+            index + 1,
+            item.product_name || "—",
+            item.roll_no || "—",
+            item.shade || "—",
+            `${item.meters} ${item.unit || "m"}`,
+            item.godown || "—",
+          ]),
+        });
       } else {
         // Handle other export formats (CSV, XLSX)
         const response = await fetch(`/api/stock/export/${format}?${new URLSearchParams({

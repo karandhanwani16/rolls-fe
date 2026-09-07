@@ -9,8 +9,7 @@ import { format } from "date-fns";
 import { Loader2, Download, FileText, FileSpreadsheet, Check, ChevronsUpDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { downloadReportPdf, formatPdfAmount, formatPdfDate, formatPdfPeriod } from "@/lib/reportPdf";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -83,27 +82,41 @@ const SalesReturnReport = () => {
     link.click();
   };
 
-  const exportToPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("T. A. TEX", 105, 15, { align: "center" });
-    doc.setFontSize(14);
-    doc.text("Sales Return Report", 105, 25, { align: "center" });
-    autoTable(doc, {
-      startY: 40,
-      head: [["Return No", "Customer", "Date", "Total"]],
-      body: filtered.map((row) => [
-        row.return_no,
-        row.customer_name,
-        format(new Date(row.date), "dd/MM/yyyy"),
-        formatAmount(row.total),
-      ]),
-    });
-    doc.save(`sales_return_report_${format(new Date(), "yyyy-MM-dd")}.pdf`);
-  };
-
   const filteredCustomers = customers.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
   const total = filtered.reduce((sum, row) => sum + (row.total || 0), 0);
+
+  const exportToPDF = () => {
+    const selectedCustomerNames = selectedCustomers.length > 0
+      ? customers.filter((c) => selectedCustomers.includes(c.id)).map((c) => c.name).join(", ")
+      : "All Customers";
+
+    downloadReportPdf({
+      title: "Sales Return Report",
+      filename: `sales_return_report_${format(new Date(), "yyyy-MM-dd")}.pdf`,
+      meta: [
+        { label: "Customers", value: selectedCustomerNames },
+        { label: "Period", value: formatPdfPeriod(startDate, endDate) },
+        { label: "Returns", value: String(filtered.length) },
+      ],
+      summary: [
+        { label: "Total Returns", value: formatPdfAmount(total), emphasize: true },
+        { label: "Number of Returns", value: String(filtered.length) },
+      ],
+      columns: [
+        { header: "Return No", width: 32, align: "center" },
+        { header: "Customer", align: "left" },
+        { header: "Date", width: 28, align: "center" },
+        { header: "Total", width: 36, align: "right" },
+      ],
+      rows: filtered.map((row) => [
+        row.return_no || "—",
+        row.customer_name || "—",
+        formatPdfDate(row.date),
+        formatPdfAmount(row.total, { prefix: false }),
+      ]),
+      foot: ["", "Total", "", formatPdfAmount(total, { prefix: false })],
+    });
+  };
 
   return (
     <ReportLayout title="Sales Return Report" description="View and export sales returns">

@@ -16,7 +16,7 @@ interface PurchaseItemsProps {
     handleBulkAdd: (productId: string, count: number) => void;
 }
 
-const ITEM_FIELDS = ['roll_no', 'shade', 'meters', 'price'];
+const ITEM_FIELDS = ['roll_no', 'shade', 'width', 'meters', 'price'];
 
 const PurchaseItems = ({
     formData,
@@ -83,6 +83,7 @@ const PurchaseItems = ({
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shade</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Width</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>

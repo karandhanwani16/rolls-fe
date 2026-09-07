@@ -370,6 +370,7 @@ const Sales = () => {
                         <TableHead>Product</TableHead>
                         <TableHead>Roll No</TableHead>
                         <TableHead>Shade</TableHead>
+                        <TableHead>Width</TableHead>
                         <TableHead className="text-right">Quantity</TableHead>
                         <TableHead className="text-right">Rate</TableHead>
                         <TableHead className="text-right">Total</TableHead>
@@ -384,6 +385,7 @@ const Sales = () => {
                             </TableCell>
                             <TableCell>{item.roll_no || "—"}</TableCell>
                             <TableCell>{item.shade || "—"}</TableCell>
+                            <TableCell>{item.width || "—"}</TableCell>
                             <TableCell className="text-right whitespace-nowrap">
                               {(Number(item.meters) || 0).toFixed(2)}{" "}
                               {item.unit || selectedSale.unit || "m"}

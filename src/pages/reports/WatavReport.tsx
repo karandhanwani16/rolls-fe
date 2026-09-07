@@ -23,8 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { downloadReportPdf, formatPdfAmount, formatPdfDate, formatPdfPeriod } from "@/lib/reportPdf";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,12 +55,6 @@ const formatAmount = (amount: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount || 0);
-
-const formatAmountForPDF = (amount: number) =>
-  new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount || 0);
@@ -257,60 +250,55 @@ const WatavReport = () => {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 15;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("T. A. TEX", pageWidth / 2, 15, { align: "center" });
-    doc.setFontSize(14);
-    doc.text("Watav Report", pageWidth / 2, 25, { align: "center" });
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`Vendor: ${selectedWatavName}`, margin, 35);
-    doc.text(
-      `Period: ${format(new Date(startDate), "dd/MM/yyyy")} to ${format(new Date(endDate), "dd/MM/yyyy")}`,
-      margin,
-      42
-    );
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Summary", margin, 52);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Gross: ₹${formatAmountForPDF(summary.totalReceived)}`, margin, 59);
-    doc.text(`Charges: ₹${formatAmountForPDF(summary.totalVendorCharges || summary.totalPaidToWatav)}`, margin, 66);
-    doc.text(`Net: ₹${formatAmountForPDF(summary.totalNetAmount || summary.totalActualAmount)}`, margin, 73);
-    doc.text(
-      `Pending net: ₹${formatAmountForPDF(summary.pending?.net || 0)} | Collected net: ₹${formatAmountForPDF(summary.collected?.net || 0)}`,
-      margin,
-      80
-    );
-
-    autoTable(doc, {
-      startY: 88,
-      head: [["Sr.", "Date", "Vendor", "Customer", "Type", "Status", "Gross", "Charges", "Net"]],
-      body: transactions.map((item) => [
+    downloadReportPdf({
+      title: "Watav Report",
+      filename: `watav_report_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`,
+      orientation: "landscape",
+      meta: [
+        { label: "Vendor", value: selectedWatavName },
+        { label: "Period", value: formatPdfPeriod(startDate, endDate) },
+        { label: "Entries", value: String(transactions.length) },
+      ],
+      summary: [
+        { label: "Gross", value: formatPdfAmount(summary.totalReceived) },
+        { label: "Charges", value: formatPdfAmount(summary.totalVendorCharges || summary.totalPaidToWatav) },
+        { label: "Pending Net", value: formatPdfAmount(summary.pending?.net || 0) },
+        { label: "Net Collected", value: formatPdfAmount(summary.totalNetAmount || summary.totalActualAmount), emphasize: true },
+      ],
+      columns: [
+        { header: "Sr.", width: 12, align: "center" },
+        { header: "Date", width: 24, align: "center" },
+        { header: "Vendor", width: 38 },
+        { header: "Customer", align: "left" },
+        { header: "Type", width: 24, align: "center" },
+        { header: "Status", width: 24, align: "center" },
+        { header: "Gross", width: 30, align: "right" },
+        { header: "Charges", width: 28, align: "right" },
+        { header: "Net", width: 30, align: "right" },
+      ],
+      rows: transactions.map((item) => [
         item.srno,
-        format(new Date(item.date), "dd/MM/yyyy"),
-        item.watavCustomerName,
+        formatPdfDate(item.date),
+        item.watavCustomerName || "—",
         item.actualCustomerName || "None",
         item.entryType === "STANDALONE" ? "Standalone" : "Customer",
         item.collectionStatus,
-        `₹${formatAmountForPDF(item.receivedAmount)}`,
-        `₹${formatAmountForPDF(item.vendorCharges)}`,
-        `₹${formatAmountForPDF(item.netAmount)}`,
+        formatPdfAmount(item.receivedAmount, { prefix: false }),
+        formatPdfAmount(item.vendorCharges, { prefix: false }),
+        formatPdfAmount(item.netAmount, { prefix: false }),
       ]),
-      styles: { fontSize: 7, cellPadding: 1.5, font: "helvetica" },
-      headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: "bold" },
-      margin: { left: margin, right: margin },
-      theme: "grid",
+      foot: [
+        "",
+        "",
+        "",
+        "Total",
+        "",
+        "",
+        formatPdfAmount(summary.totalReceived, { prefix: false }),
+        formatPdfAmount(summary.totalVendorCharges || summary.totalPaidToWatav, { prefix: false }),
+        formatPdfAmount(summary.totalNetAmount || summary.totalActualAmount, { prefix: false }),
+      ],
     });
-
-    doc.save(
-      `watav_report_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`
-    );
   };
 
   return (

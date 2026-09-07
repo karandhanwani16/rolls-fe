@@ -26,6 +26,7 @@ interface SalesItem {
   product_name: string;
   roll_no: string;
   shade?: string;
+  width?: string;
   roll_id: string;
   purchase_item_id?: string;
   meters: number;
@@ -40,6 +41,8 @@ interface SalesItem {
     meters: number;
     unit?: string;
     price: number;
+    shade?: string;
+    width?: string;
   }>;
 }
 
@@ -236,6 +239,7 @@ const SalesForm = () => {
             return {
               ...item,
               shade: item.shade || "",
+              width: item.width || "",
               total_price: parseFloat((item.meters * item.price).toFixed(2)),
               roll_id: item.roll_id,
               purchase_item_id: item.purchase_item_id || item.roll_id,
@@ -436,6 +440,7 @@ const SalesForm = () => {
           product_name: product.name,
           rolls: availableRolls,
           price: parseFloat(product.price.toFixed(2)),
+          width: currentItem.width || product.width || "",
           roll_no: currentItem.roll_no || "",
           roll_id: currentItem.roll_id || "",
           meters: currentItem.meters || 0,
@@ -471,6 +476,7 @@ const SalesForm = () => {
         roll_id: selectedRoll.id,
         purchase_item_id: selectedRoll.id,
         shade: selectedRoll.shade || "",
+        width: selectedRoll.width || newItems[index].width || "",
         meters: selectedRoll.meters,
         unit: formData.unit || DEFAULT_QUANTITY_UNIT,
         price: selectedRoll.price,
@@ -505,6 +511,7 @@ const SalesForm = () => {
           product_name: "",
           roll_no: "",
           shade: "",
+          width: "",
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
@@ -588,6 +595,7 @@ const SalesForm = () => {
           product_name: product.name,
           roll_no: "",
           shade: "",
+          width: product.width || "",
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,

@@ -14,8 +14,7 @@ import { format } from "date-fns";
 import { Loader2, Download, FileText, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { jsPDF } from "jspdf";
-import autoTable from 'jspdf-autotable';
+import { downloadReportPdf, formatPdfAmount, formatPdfDate, formatPdfPeriod } from "@/lib/reportPdf";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -156,117 +155,42 @@ const PurchaseReport = () => {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 15;
-    const contentWidth = pageWidth - (2 * margin);
-
-    // Set default font for entire document
-    doc.setFont("helvetica");
-
-    // Add company header
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("T. A. TEX", pageWidth / 2, 15, { align: "center" });
-
-    // Add report title
-    doc.setFontSize(14);
-    doc.text("Purchase Report", pageWidth / 2, 25, { align: "center" });
-
-    // Add supplier details
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
     const selectedSupplierNames = selectedSuppliers.length > 0
-      ? suppliers
-          .filter(s => selectedSuppliers.includes(s.id))
-          .map(s => s.name)
-          .join(", ")
+      ? suppliers.filter(s => selectedSuppliers.includes(s.id)).map(s => s.name).join(", ")
       : "All Suppliers";
-    doc.text(`Suppliers: ${selectedSupplierNames}`, margin, 35);
-
-    // Add date range
-    doc.text(`Period: ${format(new Date(startDate), 'dd/MM/yyyy')} to ${format(new Date(endDate), 'dd/MM/yyyy')}`, margin, 42);
-
-    // Add summary section
     const totalAmount = filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0);
-    
-    doc.setFont("helvetica", "bold");
-    doc.text("Summary", margin, 52);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Total Purchases: ₹${formatAmount(totalAmount)}`, margin, 59);
-    doc.text(`Number of Purchases: ${filteredPurchases.length}`, margin, 66);
 
-    // Add purchases table
-    autoTable(doc, {
-      startY: 75,
-      head: [["Purchase No", "Supplier", "Date", "Total", "Godown", "Received By"]],
-      body: filteredPurchases.map((purchase) => [
-        purchase.purchase_no,
-        purchase.supplier_name,
-        format(new Date(purchase.date), "dd/MM/yyyy"),
-        `₹${formatAmount(purchase.total)}`,
-        purchase.godown || "-",
-        purchase.received_by || "-"
+    downloadReportPdf({
+      title: "Purchase Report",
+      filename: `purchases_report_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`,
+      orientation: "landscape",
+      meta: [
+        { label: "Suppliers", value: selectedSupplierNames },
+        { label: "Period", value: formatPdfPeriod(startDate, endDate) },
+        { label: "Bills", value: String(filteredPurchases.length) },
+      ],
+      summary: [
+        { label: "Total Purchases", value: formatPdfAmount(totalAmount), emphasize: true },
+        { label: "Number of Purchases", value: String(filteredPurchases.length) },
+      ],
+      columns: [
+        { header: "Purchase No", width: 28, align: "center" },
+        { header: "Supplier", align: "left" },
+        { header: "Date", width: 26, align: "center" },
+        { header: "Total", width: 34, align: "right" },
+        { header: "Godown", width: 36 },
+        { header: "Received By", width: 36 },
+      ],
+      rows: filteredPurchases.map((purchase) => [
+        purchase.purchase_no || "—",
+        purchase.supplier_name || "—",
+        formatPdfDate(purchase.date),
+        formatPdfAmount(purchase.total, { prefix: false }),
+        purchase.godown || "—",
+        purchase.received_by || "—",
       ]),
-      styles: {
-        fontSize: 9,
-        cellPadding: 4,
-        overflow: 'linebreak',
-        cellWidth: 'wrap',
-        font: 'helvetica',
-        fontStyle: 'normal',
-        lineColor: [200, 200, 200],
-        lineWidth: 0.1,
-      },
-      headStyles: {
-        fillColor: [41, 128, 185],
-        textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 9,
-        font: 'helvetica',
-        halign: 'center',
-        valign: 'middle',
-        cellPadding: 5,
-      },
-      alternateRowStyles: {
-        fillColor: [245, 245, 245],
-        font: 'helvetica',
-        fontStyle: 'normal',
-      },
-      columnStyles: {
-        0: { cellWidth: 20, halign: 'center' },
-        1: { cellWidth: 'auto', halign: 'left' },
-        2: { cellWidth: 25, halign: 'center' },
-        3: { cellWidth: 30, halign: 'right' },
-        4: { cellWidth: 25, halign: 'center' },
-        5: { cellWidth: 25, halign: 'center' }
-      },
-      margin: { left: margin, right: margin },
-      tableWidth: 'auto',
-      theme: 'grid',
-      didDrawPage: function(data) {
-        // Add page number
-        doc.setFontSize(8);
-        doc.setTextColor(100);
-        doc.setFont("helvetica", "normal");
-        doc.text(
-          `Page ${data.pageNumber}`,
-          pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 10,
-          { align: "center" }
-        );
-        doc.text(
-          `Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
-          pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 5,
-          { align: "center" }
-        );
-      }
+      foot: ["", "Total", "", formatPdfAmount(totalAmount, { prefix: false }), "", ""],
     });
-
-    // Generate filename with date range
-    const filename = `purchases_report_${format(new Date(startDate), 'yyyyMMdd')}_to_${format(new Date(endDate), 'yyyyMMdd')}.pdf`;
-    doc.save(filename);
   };
 
   const filteredSuppliers = suppliers.filter(supplier =>

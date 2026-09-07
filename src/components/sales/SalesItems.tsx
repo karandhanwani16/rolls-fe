@@ -35,7 +35,7 @@ const SalesItems = ({
     defaultCustomRoll = false,
 }: SalesItemsProps) => {
     const { setRef, createKeyDownHandler } = useTableInputNavigation({
-        fields: ['roll_no', 'shade', 'meters', 'price'],
+        fields: ['roll_no', 'shade', 'width', 'meters', 'price'],
         rowCount: formData.items.length,
         onAddRow: addItem,
     });
@@ -89,6 +89,7 @@ const SalesItems = ({
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shade</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Width</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>

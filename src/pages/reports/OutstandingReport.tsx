@@ -15,8 +15,7 @@ import { format } from "date-fns";
 import { Loader2, Download, FileText, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { downloadReportPdf, formatPdfAmount, formatPdfDate, formatPdfPeriod } from "@/lib/reportPdf";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -186,64 +185,44 @@ const OutstandingReport = () => {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 15;
+    const selectedCustomerNames = selectedCustomers.length > 0
+      ? customers.filter((c) => selectedCustomers.includes(c.id)).map((c) => c.name).join(", ")
+      : "All Customers";
 
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("Outstanding Report", pageWidth / 2, 20, { align: "center" });
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(
-      `Period: ${format(new Date(startDate), "dd/MM/yyyy")} - ${format(new Date(endDate), "dd/MM/yyyy")}`,
-      pageWidth / 2,
-      28,
-      { align: "center" }
-    );
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Summary", margin, 40);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Total Outstanding: ${formatAmount(totalOutstanding)}`, margin, 47);
-    doc.text(`Unpaid / Partial Bills: ${outstandingSales.length}`, margin, 54);
-    doc.text(`Overdue Bills: ${overdueCount}`, margin, 61);
-
-    autoTable(doc, {
-      startY: 70,
-      head: [
-        [
-          "Sales No",
-          "Customer",
-          "Date",
-          "Credit",
-          "Outstanding",
-          "Overdue",
-          "Status",
-        ],
+    downloadReportPdf({
+      title: "Outstanding Report",
+      filename: `outstanding_report_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`,
+      orientation: "landscape",
+      meta: [
+        { label: "Customers", value: selectedCustomerNames },
+        { label: "Period", value: formatPdfPeriod(startDate, endDate) },
+        { label: "View", value: viewMode === "overdue" ? "Overdue Only" : "All Outstanding" },
       ],
-      body: outstandingSales.map((sale) => [
-        sale.sales_no,
-        sale.customer_name,
-        format(new Date(sale.date), "dd/MM/yyyy"),
+      summary: [
+        { label: "Total Outstanding", value: formatPdfAmount(totalOutstanding), emphasize: true },
+        { label: "Unpaid / Partial Bills", value: String(outstandingSales.length) },
+        { label: "Overdue Bills", value: String(overdueCount) },
+      ],
+      columns: [
+        { header: "Sales No", width: 28, align: "center" },
+        { header: "Customer", align: "left" },
+        { header: "Date", width: 26, align: "center" },
+        { header: "Credit Days", width: 24, align: "center" },
+        { header: "Outstanding", width: 36, align: "right" },
+        { header: "Overdue", width: 22, align: "center" },
+        { header: "Status", width: 28, align: "center" },
+      ],
+      rows: outstandingSales.map((sale) => [
+        sale.sales_no || "—",
+        sale.customer_name || "—",
+        formatPdfDate(sale.date),
         String(sale.credit_days || 0),
-        formatAmount(sale.remaining_amount ?? sale.total),
+        formatPdfAmount(sale.remaining_amount ?? sale.total, { prefix: false }),
         String(sale.overdue_days || 0),
         sale.payment_status || "UNPAID",
       ]),
-      styles: {
-        fontSize: 8,
-        cellPadding: 3,
-      },
-      headStyles: {
-        fillColor: [40, 40, 40],
-      },
+      foot: ["", "Total", "", "", formatPdfAmount(totalOutstanding, { prefix: false }), "", ""],
     });
-
-    doc.save(
-      `outstanding_report_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`
-    );
   };
 
   const filteredCustomers = customers.filter(

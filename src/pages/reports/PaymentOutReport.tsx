@@ -12,7 +12,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download, FileText, FileSpreadsheet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { downloadReportPdf, formatPdfAmount, formatPdfDate } from "@/lib/reportPdf";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const PaymentOutReport = () => {
   const [paymentsOut, setPaymentsOut] = useState<any[]>([]);
@@ -52,6 +60,41 @@ const PaymentOutReport = () => {
     });
     
     setFilteredPayments(filtered);
+  };
+
+  const exportToPDF = () => {
+    const totalAmount = filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    downloadReportPdf({
+      title: "Payments Out Report",
+      filename: `payments_out_report_${format(new Date(), "yyyy-MM-dd")}.pdf`,
+      orientation: "landscape",
+      meta: [
+        { label: "Entries", value: String(filteredPayments.length) },
+        { label: "Generated", value: format(new Date(), "dd/MM/yyyy HH:mm") },
+      ],
+      summary: [
+        { label: "Total Paid", value: formatPdfAmount(totalAmount), emphasize: true },
+        { label: "Number of Payments", value: String(filteredPayments.length) },
+      ],
+      columns: [
+        { header: "Supplier", align: "left" },
+        { header: "Amount", width: 32, align: "right" },
+        { header: "Payment Type", width: 32, align: "center" },
+        { header: "Description" },
+        { header: "Cheque Date", width: 28, align: "center" },
+        { header: "Date", width: 28, align: "center" },
+      ],
+      rows: filteredPayments.map((payment) => [
+        payment.supplier ? payment.supplier.supplier_name : "—",
+        formatPdfAmount(payment.amount, { prefix: false }),
+        payment.type || "—",
+        payment.description || "—",
+        payment.cheque_date ? formatPdfDate(payment.cheque_date) : "—",
+        formatPdfDate(payment.created_at),
+      ]),
+      foot: ["Total", formatPdfAmount(totalAmount, { prefix: false }), "", "", "", ""],
+    });
   };
 
   const exportToCSV = () => {
@@ -95,13 +138,33 @@ const PaymentOutReport = () => {
       title="Payments Out Report"
       description="View and export payments made to suppliers"
       onDateChange={handleDateChange}
-      onExport={exportToCSV}
     >
       {loading ? (
         <div className="flex justify-center items-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
+        <div className="flex flex-col space-y-4">
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="mr-2 h-4 w-4" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportToPDF}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Export as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportToCSV}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Export as CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         <div className="rounded-md border overflow-hidden">
           <Table>
             <TableHeader>
@@ -147,6 +210,7 @@ const PaymentOutReport = () => {
               )}
             </TableBody>
           </Table>
+        </div>
         </div>
       )}
     </ReportLayout>

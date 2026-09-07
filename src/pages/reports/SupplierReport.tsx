@@ -14,8 +14,7 @@ import { format } from "date-fns";
 import { Loader2, Download, FileText, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { jsPDF } from "jspdf";
-import autoTable from 'jspdf-autotable';
+import { downloadReportPdf, formatPdfAmount, formatPdfDate, formatPdfPeriod } from "@/lib/reportPdf";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -148,126 +147,47 @@ const SupplierReport = () => {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 15;
-    const contentWidth = pageWidth - (2 * margin);
-
-    // Set default font for entire document
-    doc.setFont("helvetica");
-
-    // Add company header
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("T. A. TEX", pageWidth / 2, 15, { align: "center" });
-
-    // Add report title
-    doc.setFontSize(14);
-    doc.text("Supplier Transactions Report", pageWidth / 2, 25, { align: "center" });
-
-    // Add supplier details
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
     const supplierName = suppliers.find(s => s.id === selectedSupplier)?.name || "All Suppliers";
-    doc.text(`Supplier: ${supplierName}`, margin, 35);
-
-    // Add date range
-    doc.text(`Period: ${format(new Date(startDate), 'dd/MM/yyyy')} to ${format(new Date(endDate), 'dd/MM/yyyy')}`, margin, 42);
-
-    // Add summary section
     const totalDebit = transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0);
     const totalCredit = transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0);
     const openingBalance = getOpeningBalance();
     const balance = getClosingBalance();
 
-    // Format amounts without currency symbol for PDF
-    const formatAmountForPDF = (amount: number) => {
-      return new Intl.NumberFormat('en-IN', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }).format(amount);
-    };
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Summary", margin, 52);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Opening Balance: ₹${formatAmountForPDF(openingBalance)}`, margin, 59);
-    doc.text(`Total Debit: ₹${formatAmountForPDF(totalDebit)}`, margin, 66);
-    doc.text(`Total Credit: ₹${formatAmountForPDF(totalCredit)}`, margin, 73);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Closing Balance: ₹${formatAmountForPDF(balance)}`, margin, 80);
-
-    // Add transactions table
-    autoTable(doc, {
-      startY: 87,
-      head: [["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit", "Balance"]],
-      body: transactions.data.map((item) => [
+    downloadReportPdf({
+      title: "Supplier Transactions Report",
+      filename: `${supplierName.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_transactions_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`,
+      orientation: "landscape",
+      meta: [
+        { label: "Supplier", value: supplierName },
+        { label: "Period", value: formatPdfPeriod(startDate, endDate) },
+        { label: "Entries", value: String(transactions.data.length) },
+      ],
+      summary: [
+        { label: "Opening Balance", value: formatPdfAmount(openingBalance) },
+        { label: "Total Debit", value: formatPdfAmount(totalDebit) },
+        { label: "Total Credit", value: formatPdfAmount(totalCredit) },
+        { label: "Closing Balance", value: formatPdfAmount(balance), emphasize: true },
+      ],
+      columns: [
+        { header: "Sr.", width: 14, align: "center" },
+        { header: "Date", width: 26, align: "center" },
+        { header: "Particulars", align: "left" },
+        { header: "Voucher No.", width: 42, overflow: "ellipsize" },
+        { header: "Debit", width: 36, align: "right" },
+        { header: "Credit", width: 36, align: "right" },
+        { header: "Balance", width: 38, align: "right" },
+      ],
+      rows: transactions.data.map((item) => [
         item.srno,
-        format(new Date(item.date), "dd/MM/yyyy"),
-        item.particulars,
-        item.voucherNo,
-        `₹${formatAmountForPDF(item.debit)}`,
-        `₹${formatAmountForPDF(item.credit)}`,
-        `₹${formatAmountForPDF(item.balance ?? 0)}`,
+        formatPdfDate(item.date),
+        item.particulars || "—",
+        item.voucherNo || "—",
+        formatPdfAmount(item.debit, { blankZero: true, prefix: false }),
+        formatPdfAmount(item.credit, { blankZero: true, prefix: false }),
+        formatPdfAmount(item.balance ?? 0, { prefix: false }),
       ]),
-      styles: {
-        fontSize: 8,
-        cellPadding: 3,
-        overflow: 'linebreak',
-        cellWidth: 'wrap',
-        font: 'helvetica',
-        fontStyle: 'normal'
-      },
-      headStyles: {
-        fillColor: [41, 128, 185],
-        textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 8,
-        font: 'helvetica'
-      },
-      alternateRowStyles: {
-        fillColor: [245, 245, 245],
-        font: 'helvetica',
-        fontStyle: 'normal'
-      },
-      columnStyles: {
-        0: { cellWidth: 15, font: 'helvetica' },
-        1: { cellWidth: 25, font: 'helvetica' },
-        2: { cellWidth: 'auto', font: 'helvetica' },
-        3: { cellWidth: 25, font: 'helvetica' },
-        4: { cellWidth: 25, halign: 'right', font: 'helvetica' },
-        5: { cellWidth: 25, halign: 'right', font: 'helvetica' },
-        6: { cellWidth: 25, halign: 'right', font: 'helvetica' }
-      },
-      margin: { left: margin, right: margin },
-      tableWidth: 'auto',
-      theme: 'grid'
+      foot: ["", "", "Total", "", formatPdfAmount(totalDebit, { prefix: false }), formatPdfAmount(totalCredit, { prefix: false }), formatPdfAmount(balance, { prefix: false })],
     });
-
-    // Add footer
-    const pageCount = doc.internal.pages.length - 1;
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(100);
-      doc.setFont("helvetica", "normal");
-      doc.text(
-        `Page ${i} of ${pageCount}`,
-        pageWidth / 2,
-        doc.internal.pageSize.getHeight() - 10,
-        { align: "center" }
-      );
-      doc.text(
-        `Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
-        pageWidth / 2,
-        doc.internal.pageSize.getHeight() - 5,
-        { align: "center" }
-      );
-    }
-
-    // Generate filename with supplier name and date range
-    const filename = `${supplierName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_transactions_${format(new Date(startDate), 'yyyyMMdd')}_to_${format(new Date(endDate), 'yyyyMMdd')}.pdf`;
-    doc.save(filename);
   };
 
   const filteredSuppliers = suppliers.filter(supplier =>

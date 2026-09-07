@@ -90,6 +90,16 @@ const PurchaseItemRow = ({
         />
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
+        <Input
+          ref={setRef("width", index)}
+          value={item.width || ""}
+          onChange={(e) => handleItemChange(index, "width", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "width")}
+          placeholder="Width"
+          className="focus-visible:ring-brand-teal min-w-[80px]"
+        />
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center gap-2">
           <CurrencyInput
             ref={setRef("meters", index)}
