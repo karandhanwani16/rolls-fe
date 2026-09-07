@@ -199,7 +199,7 @@ const CustomerReport = () => {
         formatPdfAmount(item.credit, { blankZero: true, prefix: false }),
         formatPdfAmount(item.balance ?? 0, { prefix: false }),
       ]),
-      foot: ["", "", "Total", "", formatPdfAmount(totalDebit, { prefix: false }), formatPdfAmount(totalCredit, { prefix: false }), formatPdfAmount(balance, { prefix: false })],
+      foot: ["", "", "", "Total", formatPdfAmount(totalDebit, { prefix: false }), formatPdfAmount(totalCredit, { prefix: false }), formatPdfAmount(balance, { prefix: false })],
     });
   };
 

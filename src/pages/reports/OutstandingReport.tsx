@@ -221,7 +221,7 @@ const OutstandingReport = () => {
         String(sale.overdue_days || 0),
         sale.payment_status || "UNPAID",
       ]),
-      foot: ["", "Total", "", "", formatPdfAmount(totalOutstanding, { prefix: false }), "", ""],
+      foot: ["", "", "", "Total", formatPdfAmount(totalOutstanding, { prefix: false }), "", ""],
     });
   };
 

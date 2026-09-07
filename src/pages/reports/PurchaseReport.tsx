@@ -189,7 +189,7 @@ const PurchaseReport = () => {
         purchase.godown || "—",
         purchase.received_by || "—",
       ]),
-      foot: ["", "Total", "", formatPdfAmount(totalAmount, { prefix: false }), "", ""],
+      foot: ["", "", "Total", formatPdfAmount(totalAmount, { prefix: false }), "", ""],
     });
   };
 

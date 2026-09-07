@@ -99,8 +99,8 @@ const PaymentInReport = () => {
         formatPdfDate(payment.created_at),
       ]),
       foot: [
-        "Total",
         "",
+        "Total",
         formatPdfAmount(totalReceived, { prefix: false }),
         formatPdfAmount(totalActual, { prefix: false }),
         formatPdfAmount(totalCharges, { prefix: false }),

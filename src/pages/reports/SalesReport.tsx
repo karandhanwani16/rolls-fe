@@ -194,7 +194,7 @@ const SalesReport = () => {
         String(sale.overdue_days || 0),
         String(sale.credit_days || 0),
       ]),
-      foot: ["", "Total", "", formatPdfAmount(totalAmount, { prefix: false }), formatPdfAmount(totalOutstanding, { prefix: false }), "", ""],
+      foot: ["", "", "Total", formatPdfAmount(totalAmount, { prefix: false }), formatPdfAmount(totalOutstanding, { prefix: false }), "", ""],
     });
   };
 

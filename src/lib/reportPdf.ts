@@ -16,7 +16,7 @@ const CARD_BG: [number, number, number] = [248, 250, 252];
 const EMPHASIS_BG: [number, number, number] = [22, 48, 80];
 
 const MARGIN = 12;
-const HEADER_BAND = 26;
+const HEADER_BAND = 28;
 const FOOTER_RESERVE = 16;
 
 export type ReportOrientation = "portrait" | "landscape";
@@ -87,13 +87,13 @@ function drawHeaderBand(doc: jsPDF, pageWidth: number) {
 
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(COMPANY_NAME, pageWidth / 2, 11, { align: "center" });
+  doc.setFontSize(18);
+  doc.text(COMPANY_NAME, pageWidth / 2, 12, { align: "center" });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(9.5);
   doc.setTextColor(203, 213, 225);
-  doc.text(`${COMPANY_ADDRESS}  ·  ${COMPANY_TAGLINE}`, pageWidth / 2, 19, {
+  doc.text(`${COMPANY_ADDRESS}  ·  ${COMPANY_TAGLINE}`, pageWidth / 2, 20.5, {
     align: "center",
   });
 }
@@ -105,7 +105,7 @@ function drawFooter(doc: jsPDF, pageWidth: number, pageHeight: number, page: num
   doc.line(MARGIN, pageHeight - 12, pageWidth - MARGIN, pageHeight - 12);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   setRgb(doc, "setTextColor", MUTED);
   doc.text(`Generated ${format(new Date(), "dd/MM/yyyy HH:mm")}`, MARGIN, y);
   doc.text("Confidential", pageWidth / 2, y, { align: "center" });
@@ -115,34 +115,34 @@ function drawFooter(doc: jsPDF, pageWidth: number, pageHeight: number, page: num
 function drawTitle(doc: jsPDF, title: string, pageWidth: number, y: number) {
   setRgb(doc, "setTextColor", NAVY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(15);
   doc.text(title, pageWidth / 2, y, { align: "center" });
-  return y + 6;
+  return y + 7;
 }
 
 function drawMeta(doc: jsPDF, meta: ReportMeta[], pageWidth: number, y: number) {
   if (!meta.length) return y;
 
   const contentWidth = pageWidth - MARGIN * 2;
-  const boxH = 10;
+  const boxH = 12;
   setRgb(doc, "setFillColor", CARD_BG);
   setRgb(doc, "setDrawColor", LINE);
   doc.setLineWidth(0.2);
   doc.roundedRect(MARGIN, y, contentWidth, boxH, 1.2, 1.2, "FD");
 
   const colW = contentWidth / Math.min(meta.length, 3);
-  doc.setFontSize(8);
+  doc.setFontSize(9.5);
   meta.slice(0, 3).forEach((item, index) => {
     const x = MARGIN + 4 + index * colW;
     setRgb(doc, "setTextColor", MUTED);
     doc.setFont("helvetica", "normal");
-    doc.text(`${item.label}:`, x, y + 6.4);
+    doc.text(`${item.label}:`, x, y + 7.6);
     const labelW = doc.getTextWidth(`${item.label}: `);
     setRgb(doc, "setTextColor", TEXT);
     doc.setFont("helvetica", "bold");
     const maxW = colW - labelW - 8;
     const value = doc.splitTextToSize(item.value || "—", Math.max(maxW, 20));
-    doc.text(Array.isArray(value) ? value[0] : value, x + labelW, y + 6.4);
+    doc.text(Array.isArray(value) ? value[0] : value, x + labelW, y + 7.6);
   });
 
   return y + boxH + 5;
@@ -158,7 +158,7 @@ function drawFittedRightText(
 ) {
   let size = fontSize;
   doc.setFontSize(size);
-  while (size > 7 && doc.getTextWidth(text) > maxWidth) {
+  while (size > 8 && doc.getTextWidth(text) > maxWidth) {
     size -= 0.4;
     doc.setFontSize(size);
   }
@@ -172,7 +172,7 @@ function drawSummary(doc: jsPDF, summary: ReportSummaryItem[], pageWidth: number
   const perRow = Math.min(summary.length, 4);
   const gap = 3.5;
   const cardW = (contentWidth - gap * (perRow - 1)) / perRow;
-  const cardH = 18;
+  const cardH = 20;
   let y = startY;
 
   for (let i = 0; i < summary.length; i += perRow) {
@@ -185,11 +185,11 @@ function drawSummary(doc: jsPDF, summary: ReportSummaryItem[], pageWidth: number
         doc.roundedRect(x, y, cardW, cardH, 1.4, 1.4, "F");
         doc.setTextColor(191, 219, 254);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.5);
-        doc.text(item.label.toUpperCase(), x + 4, y + 6);
+        doc.setFontSize(8);
+        doc.text(item.label.toUpperCase(), x + 4, y + 6.5);
         doc.setTextColor(255, 255, 255);
         doc.setFont("helvetica", "bold");
-        drawFittedRightText(doc, item.value, x + cardW - 4, y + 13.6, valueMax, 10);
+        drawFittedRightText(doc, item.value, x + cardW - 4, y + 15.2, valueMax, 12);
       } else {
         setRgb(doc, "setFillColor", CARD_BG);
         setRgb(doc, "setDrawColor", LINE);
@@ -197,11 +197,11 @@ function drawSummary(doc: jsPDF, summary: ReportSummaryItem[], pageWidth: number
         doc.roundedRect(x, y, cardW, cardH, 1.4, 1.4, "FD");
         setRgb(doc, "setTextColor", MUTED);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.5);
-        doc.text(item.label.toUpperCase(), x + 4, y + 6);
+        doc.setFontSize(8);
+        doc.text(item.label.toUpperCase(), x + 4, y + 6.5);
         setRgb(doc, "setTextColor", NAVY);
         doc.setFont("helvetica", "bold");
-        drawFittedRightText(doc, item.value, x + cardW - 4, y + 13.6, valueMax, 10);
+        drawFittedRightText(doc, item.value, x + cardW - 4, y + 15.2, valueMax, 12);
       }
     });
     y += cardH + 3.5;
@@ -241,8 +241,8 @@ export function createReportPdf({
     theme: "plain",
     styles: {
       font: "helvetica",
-      fontSize: orientation === "landscape" ? 8 : 7.5,
-      cellPadding: { top: 2.6, right: 2.4, bottom: 2.6, left: 2.4 },
+      fontSize: orientation === "landscape" ? 11 : 10,
+      cellPadding: { top: 3.2, right: 2.8, bottom: 3.2, left: 2.8 },
       textColor: TEXT,
       overflow: "linebreak",
       valign: "middle",
@@ -253,10 +253,10 @@ export function createReportPdf({
       fillColor: NAVY,
       textColor: 255,
       fontStyle: "bold",
-      fontSize: 8,
+      fontSize: 10.5,
       halign: "center",
       valign: "middle",
-      cellPadding: { top: 3.2, right: 2.4, bottom: 3.2, left: 2.4 },
+      cellPadding: { top: 3.8, right: 2.8, bottom: 3.8, left: 2.8 },
     },
     bodyStyles: {
       fillColor: [255, 255, 255],
@@ -268,7 +268,9 @@ export function createReportPdf({
       fillColor: [241, 245, 249],
       textColor: NAVY,
       fontStyle: "bold",
-      fontSize: 8,
+      fontSize: 11,
+      halign: "right",
+      valign: "middle",
       lineWidth: 0.2,
       lineColor: NAVY,
     },
@@ -288,6 +290,11 @@ export function createReportPdf({
     },
     tableLineColor: LINE,
     tableLineWidth: 0.15,
+    didParseCell: (data) => {
+      if (data.section === "foot") {
+        data.cell.styles.halign = "right";
+      }
+    },
     didDrawPage: () => {
       drawHeaderBand(doc, pageWidth);
     },

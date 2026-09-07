@@ -114,7 +114,7 @@ const PurchaseReturnReport = () => {
         formatPdfDate(row.date),
         formatPdfAmount(row.total, { prefix: false }),
       ]),
-      foot: ["", "Total", "", formatPdfAmount(total, { prefix: false })],
+      foot: ["", "", "Total", formatPdfAmount(total, { prefix: false })],
     });
   };
 
