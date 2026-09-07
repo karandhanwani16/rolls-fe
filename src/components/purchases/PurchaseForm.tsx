@@ -44,6 +44,7 @@ interface PurchaseFormData {
   transport?: string;
   transport_charges?: number;
   discount?: number;
+  credit_days?: number;
   unit?: string;
   received_by?: string;
   items: PurchaseItem[];
@@ -62,6 +63,7 @@ const PurchaseForm = () => {
     total_amount: 0,
     transport_charges: 0,
     discount: 0,
+    credit_days: 0,
     unit: DEFAULT_QUANTITY_UNIT,
     items: [],
   });
@@ -155,6 +157,7 @@ const PurchaseForm = () => {
           transport: response.transport,
           transport_charges: response.transport_charges || 0,
           discount: response.discount || 0,
+          credit_days: response.credit_days || 0,
           unit: normalizeUnit(response.unit || response.items?.[0]?.unit),
           received_by: response.received_by,
           items: items || [],

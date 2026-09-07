@@ -41,6 +41,10 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { CreditCard, Plus, Search, Edit, Trash2 } from "lucide-react";
 import { paymentsInAPI, customersAPI } from "@/services/api";
 import { getRegularCustomers, getWatavVendors } from "@/lib/partyTypes";
+import {
+  settlementClassName,
+  settlementLabel,
+} from "@/lib/watavSettlement";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -68,8 +72,6 @@ const paymentInSchema = z
     type: z.string().min(1, "Payment instrument is required"),
     description: z.string().optional().nullable(),
     payment_date: z.date(),
-    collection_status: z.enum(["PENDING", "COLLECTED"]).optional().nullable(),
-    collection_date: z.date().optional().nullable(),
   })
   .superRefine((data, ctx) => {
     if (data.payment_category === "NORMAL") {
@@ -112,8 +114,6 @@ const defaultFormValues: PaymentInFormValues = {
   type: "",
   description: "",
   payment_date: new Date(),
-  collection_status: "PENDING",
-  collection_date: null,
 };
 
 const PaymentsIn = () => {
@@ -121,6 +121,7 @@ const PaymentsIn = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentPaymentIn, setCurrentPaymentIn] = useState<any>(null);
+  const [historyPayment, setHistoryPayment] = useState<any>(null);
 
   const queryClient = useQueryClient();
 
@@ -251,8 +252,6 @@ const PaymentsIn = () => {
       type: payment.type,
       description: payment.description || "",
       payment_date: payment.payment_date ? new Date(payment.payment_date) : new Date(),
-      collection_status: payment.collection_status || "PENDING",
-      collection_date: payment.collection_date ? new Date(payment.collection_date) : null,
     });
     setIsEditDialogOpen(true);
   };
@@ -365,15 +364,20 @@ const PaymentsIn = () => {
                         <TableCell>{formatCurrency(payment.actual_amount)}</TableCell>
                         <TableCell>
                           {isVatav ? (
-                            <span
-                              className={
-                                payment.collection_status === "COLLECTED"
-                                  ? "text-green-700 font-medium"
-                                  : "text-amber-700 font-medium"
-                              }
+                            <button
+                              type="button"
+                              className="text-left"
+                              onClick={() => setHistoryPayment(payment)}
                             >
-                              {payment.collection_status === "COLLECTED" ? "Collected" : "Pending"}
-                            </span>
+                              <span className={settlementClassName(payment.settlementStatus || payment.collection_status)}>
+                                {settlementLabel(payment.settlementStatus || payment.collection_status)}
+                              </span>
+                              {(payment.remainingAmount > 0 || payment.totalSettledAmount > 0) && (
+                                <div className="text-xs text-muted-foreground">
+                                  Remaining {formatCurrency(payment.remainingAmount || 0)}
+                                </div>
+                              )}
+                            </button>
                           ) : (
                             "—"
                           )}
@@ -445,6 +449,11 @@ const PaymentsIn = () => {
         isLoadingCustomers={isLoadingCustomers}
         submitLabel="Save Changes"
       />
+
+      <SettlementHistoryDialog
+        payment={historyPayment}
+        onClose={() => setHistoryPayment(null)}
+      />
     </DashboardLayout>
   );
 };
@@ -474,13 +483,6 @@ function toApiPayload(data: PaymentInFormValues) {
     type: data.type,
     description: data.description || "",
     payment_date: data.payment_date,
-    collection_status: isVatav ? data.collection_status || "PENDING" : null,
-    collection_date:
-      isVatav && data.collection_status === "COLLECTED" && data.collection_date
-        ? data.collection_date
-        : isVatav && data.collection_status === "COLLECTED"
-          ? new Date()
-          : null,
   };
 }
 
@@ -502,14 +504,9 @@ function useNormalReceiveSync(form: ReturnType<typeof useForm<PaymentInFormValue
       form.setValue("receive_id", actualId || "");
       form.setValue("charges", 0);
       form.setValue("entry_type", null);
-      form.setValue("collection_status", null);
-      form.setValue("collection_date", null);
     } else {
       if (!form.getValues("entry_type")) {
         form.setValue("entry_type", "CUSTOMER_PAYMENT");
-      }
-      if (!form.getValues("collection_status")) {
-        form.setValue("collection_status", "PENDING");
       }
     }
   }, [category, actualId]);
@@ -540,7 +537,6 @@ function PaymentFormDialog({
 }) {
   const category = form.watch("payment_category");
   const entryType = form.watch("entry_type");
-  const collectionStatus = form.watch("collection_status");
   const receivedAmount = Number(form.watch("received_amount")) || 0;
   const discountAmount = Number(form.watch("discount")) || 0;
   const isVatav = category === "VATAV";
@@ -616,7 +612,7 @@ function PaymentFormDialog({
                       {isStandalone && (
                         <FormDescription className="text-amber-700">
                           Standalone entries do not affect any customer balance. They only sit on the
-                          Watav vendor account until collected.
+                          Watav vendor account until the vendor settles.
                         </FormDescription>
                       )}
                       <FormMessage />
@@ -872,56 +868,10 @@ function PaymentFormDialog({
                   />
 
                   {isVatav && (
-                    <>
-                      <FormField
-                        control={form.control}
-                        name="collection_status"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Collection Status</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value || "PENDING"}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="PENDING">Pending</SelectItem>
-                                <SelectItem value="COLLECTED">Collected</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {collectionStatus === "COLLECTED" && (
-                        <FormField
-                          control={form.control}
-                          name="collection_date"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Collection Date</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="date"
-                                  value={
-                                    field.value
-                                      ? format(field.value, "yyyy-MM-dd")
-                                      : format(new Date(), "yyyy-MM-dd")
-                                  }
-                                  onChange={(e) => field.onChange(new Date(e.target.value))}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </>
+                    <p className="text-sm text-muted-foreground rounded-md border bg-muted/40 px-3 py-2">
+                      Vendor collection is recorded separately as a Watav vendor receipt. This customer
+                      payment is treated as received immediately.
+                    </p>
                   )}
 
                   <FormField
@@ -958,6 +908,95 @@ function PaymentFormDialog({
             </DialogFooter>
           </form>
         </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SettlementHistoryDialog({
+  payment,
+  onClose,
+}: {
+  payment: any;
+  onClose: () => void;
+}) {
+  if (!payment) return null;
+  const allocations = payment.watav_allocations || payment.allocations || [];
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 2,
+    }).format(amount || 0);
+
+  return (
+    <Dialog open={!!payment} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[640px]">
+        <DialogHeader>
+          <DialogTitle>Watav settlement history</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-3 gap-3 text-sm">
+          <div>
+            <div className="text-muted-foreground">Original</div>
+            <div className="font-semibold">
+              {formatCurrency(payment.originalAmount ?? payment.received_amount)}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Settled</div>
+            <div className="font-semibold text-green-700">
+              {formatCurrency(payment.totalSettledAmount || 0)}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Remaining</div>
+            <div className="font-semibold">
+              {formatCurrency(payment.remainingAmount || 0)}
+            </div>
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          This is a completed customer payment. Vendor collection ({settlementLabel(payment.settlementStatus || payment.collection_status)}) does not change the customer balance.
+        </p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Receipt date</TableHead>
+              <TableHead>Reference</TableHead>
+              <TableHead className="text-right">Allocated</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {allocations.length > 0 ? (
+              allocations.map((row: any) => (
+                <TableRow key={row.id}>
+                  <TableCell>
+                    {row.receipt?.receipt_date
+                      ? format(new Date(row.receipt.receipt_date), "dd/MM/yyyy")
+                      : row.receiptDate
+                        ? format(new Date(row.receiptDate), "dd/MM/yyyy")
+                        : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {row.receipt?.reference || row.receiptReference || "—"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(row.allocated_amount ?? row.allocatedAmount)}
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  No vendor receipts allocated yet
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

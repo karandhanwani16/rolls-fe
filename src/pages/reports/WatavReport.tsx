@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { downloadReportPdf, formatPdfAmount, formatPdfDate, formatPdfPeriod } from "@/lib/reportPdf";
 import {
   DropdownMenu,
@@ -50,6 +49,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import {
+  settlementClassName,
+  settlementLabel,
+} from "@/lib/watavSettlement";
 
 const formatAmount = (amount: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -66,10 +69,17 @@ const emptySummary = {
   totalActualAmount: 0,
   totalVendorCharges: 0,
   totalNetAmount: 0,
+  totalReceivable: 0,
+  totalSettled: 0,
+  currentPending: 0,
+  unallocatedAmount: 0,
+  vendorReceiptsTotal: 0,
+  partiallySettledCount: 0,
   pending: {
     entries: 0,
     gross: 0,
     net: 0,
+    remaining: 0,
     charges: 0,
     customerLinkedGross: 0,
     standaloneGross: 0,
@@ -84,6 +94,7 @@ const emptySummary = {
   },
   customerLinked: { entries: 0, gross: 0, net: 0, charges: 0 },
   standalone: { entries: 0, gross: 0, net: 0, charges: 0 },
+  partial: { entries: 0, remaining: 0, settled: 0 },
 };
 
 const WatavReport = () => {
@@ -101,10 +112,8 @@ const WatavReport = () => {
   const [entryTypeFilter, setEntryTypeFilter] = useState<string>("ALL");
   const [transactions, setTransactions] = useState<any[]>([]);
   const [byWatav, setByWatav] = useState<any[]>([]);
+  const [receipts, setReceipts] = useState<any[]>([]);
   const [summary, setSummary] = useState(emptySummary);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [collectionDate, setCollectionDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [collecting, setCollecting] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -126,7 +135,6 @@ const WatavReport = () => {
   const fetchReport = async () => {
     try {
       setLoading(true);
-      setSelectedIds([]);
       const data = await paymentsInAPI.getWatavReport({
         startDate,
         endDate,
@@ -136,6 +144,7 @@ const WatavReport = () => {
       });
       setTransactions(data.data || []);
       setByWatav(data.byWatav || []);
+      setReceipts(data.receipts || []);
       setSummary({ ...emptySummary, ...(data.summary || {}) });
     } catch (error) {
       console.error("Error fetching watav report:", error);
@@ -160,46 +169,6 @@ const WatavReport = () => {
       customer.city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const pendingSelectable = transactions.filter((t) => t.collectionStatus !== "COLLECTED");
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const toggleSelectAllPending = () => {
-    if (selectedIds.length === pendingSelectable.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(pendingSelectable.map((t) => t.id));
-    }
-  };
-
-  const handleCollect = async () => {
-    if (selectedIds.length === 0) return;
-    try {
-      setCollecting(true);
-      await paymentsInAPI.collect({
-        ids: selectedIds,
-        collection_date: collectionDate,
-      });
-      toast({
-        title: "Collected",
-        description: `Marked ${selectedIds.length} entr${selectedIds.length === 1 ? "y" : "ies"} as collected.`,
-      });
-      await fetchReport();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to mark entries as collected",
-        variant: "destructive",
-      });
-    } finally {
-      setCollecting(false);
-    }
-  };
-
   const exportToCSV = () => {
     const headers = [
       "Sr. No.",
@@ -207,11 +176,10 @@ const WatavReport = () => {
       "Watav Vendor",
       "Customer",
       "Entry Type",
-      "Collection Status",
-      "Collection Date",
-      "Gross Amount",
-      "Vendor Charges",
-      "Net Amount",
+      "Settlement Status",
+      "Original",
+      "Settled",
+      "Remaining",
       "Instrument",
       "Description",
     ];
@@ -225,10 +193,9 @@ const WatavReport = () => {
           `"${item.actualCustomerName || "None"}"`,
           item.entryType,
           item.collectionStatus,
-          item.collectionDate ? format(new Date(item.collectionDate), "yyyy-MM-dd") : "",
-          item.receivedAmount,
-          item.vendorCharges,
-          item.netAmount,
+          item.originalAmount ?? item.receivedAmount,
+          item.totalSettledAmount || 0,
+          item.remainingAmount ?? 0,
           `"${item.type || ""}"`,
           `"${item.description || ""}"`,
         ].join(",")
@@ -260,10 +227,10 @@ const WatavReport = () => {
         { label: "Entries", value: String(transactions.length) },
       ],
       summary: [
-        { label: "Gross", value: formatPdfAmount(summary.totalReceived) },
-        { label: "Charges", value: formatPdfAmount(summary.totalVendorCharges || summary.totalPaidToWatav) },
-        { label: "Pending Net", value: formatPdfAmount(summary.pending?.net || 0) },
-        { label: "Net Collected", value: formatPdfAmount(summary.totalNetAmount || summary.totalActualAmount), emphasize: true },
+        { label: "Receivable", value: formatPdfAmount(summary.totalReceivable || summary.totalReceived) },
+        { label: "Settled", value: formatPdfAmount(summary.totalSettled || 0) },
+        { label: "Pending", value: formatPdfAmount(summary.currentPending || summary.pending?.remaining || summary.pending?.net || 0) },
+        { label: "Unallocated", value: formatPdfAmount(summary.unallocatedAmount || 0), emphasize: true },
       ],
       columns: [
         { header: "Sr.", width: 12, align: "center" },
@@ -271,10 +238,10 @@ const WatavReport = () => {
         { header: "Vendor", width: 38 },
         { header: "Customer", align: "left" },
         { header: "Type", width: 24, align: "center" },
-        { header: "Status", width: 24, align: "center" },
-        { header: "Gross", width: 30, align: "right" },
-        { header: "Charges", width: 28, align: "right" },
-        { header: "Net", width: 30, align: "right" },
+        { header: "Status", width: 28, align: "center" },
+        { header: "Original", width: 28, align: "right" },
+        { header: "Settled", width: 28, align: "right" },
+        { header: "Remaining", width: 30, align: "right" },
       ],
       rows: transactions.map((item) => [
         item.srno,
@@ -282,10 +249,10 @@ const WatavReport = () => {
         item.watavCustomerName || "—",
         item.actualCustomerName || "None",
         item.entryType === "STANDALONE" ? "Standalone" : "Customer",
-        item.collectionStatus,
-        formatPdfAmount(item.receivedAmount, { prefix: false }),
-        formatPdfAmount(item.vendorCharges, { prefix: false }),
-        formatPdfAmount(item.netAmount, { prefix: false }),
+        settlementLabel(item.collectionStatus),
+        formatPdfAmount(item.originalAmount ?? item.receivedAmount, { prefix: false }),
+        formatPdfAmount(item.totalSettledAmount || 0, { prefix: false }),
+        formatPdfAmount(item.remainingAmount ?? 0, { prefix: false }),
       ]),
       foot: [
         "",
@@ -294,9 +261,9 @@ const WatavReport = () => {
         "",
         "",
         "Total",
-        formatPdfAmount(summary.totalReceived, { prefix: false }),
-        formatPdfAmount(summary.totalVendorCharges || summary.totalPaidToWatav, { prefix: false }),
-        formatPdfAmount(summary.totalNetAmount || summary.totalActualAmount, { prefix: false }),
+        formatPdfAmount(summary.totalReceivable || summary.totalReceived, { prefix: false }),
+        formatPdfAmount(summary.totalSettled || 0, { prefix: false }),
+        formatPdfAmount(summary.currentPending || summary.pending?.remaining || 0, { prefix: false }),
       ],
     });
   };
@@ -304,7 +271,7 @@ const WatavReport = () => {
   return (
     <ReportLayout
       title="Watav Report"
-      description="Vendor account balances — pending and collected Watav entries (customer-linked and standalone)"
+      description="Vendor receivables from Watav payments — customer already paid; pending is collectible from the vendor"
     >
       <div className="flex flex-col space-y-4">
         <div className="flex flex-wrap gap-4 items-center">
@@ -381,8 +348,9 @@ const WatavReport = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All statuses</SelectItem>
-              <SelectItem value="PENDING">Pending</SelectItem>
-              <SelectItem value="COLLECTED">Collected</SelectItem>
+              <SelectItem value="PENDING">Outstanding</SelectItem>
+              <SelectItem value="PARTIALLY_SETTLED">Partially settled</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
             </SelectContent>
           </Select>
 
@@ -423,21 +391,21 @@ const WatavReport = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="bg-sidebar/5 rounded-lg p-4 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-sidebar/5 rounded-lg p-4 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
-                <div className="text-sm text-muted-foreground">Gross Watav</div>
-                <div className="font-semibold text-lg">{formatAmount(summary.totalReceived)}</div>
+                <div className="text-sm text-muted-foreground">Watav receivable</div>
+                <div className="font-semibold text-lg">{formatAmount(summary.totalReceivable || summary.totalReceived)}</div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Vendor Charges</div>
-                <div className="font-semibold text-lg text-amber-700">
-                  {formatAmount(summary.totalVendorCharges || summary.totalPaidToWatav)}
+                <div className="text-sm text-muted-foreground">Received / settled</div>
+                <div className="font-semibold text-lg text-green-700">
+                  {formatAmount(summary.totalSettled || 0)}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Pending (Net)</div>
+                <div className="text-sm text-muted-foreground">Current pending</div>
                 <div className="font-bold text-lg text-amber-800">
-                  {formatAmount(summary.pending?.net || 0)}
+                  {formatAmount(summary.currentPending || summary.pending?.remaining || summary.pending?.net || 0)}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   Customer {formatAmount(summary.pending?.customerLinkedGross || 0)} · Standalone{" "}
@@ -445,13 +413,18 @@ const WatavReport = () => {
                 </div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Collected (Net)</div>
-                <div className="font-bold text-lg text-green-700">
-                  {formatAmount(summary.collected?.net || 0)}
+                <div className="text-sm text-muted-foreground">Partially settled</div>
+                <div className="font-bold text-lg">
+                  {summary.partiallySettledCount || summary.partial?.entries || 0}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Customer {formatAmount(summary.collected?.customerLinkedGross || 0)} · Standalone{" "}
-                  {formatAmount(summary.collected?.standaloneGross || 0)}
+                  Remaining {formatAmount(summary.partial?.remaining || 0)}
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Unallocated receipts</div>
+                <div className="font-bold text-lg">
+                  {formatAmount(summary.unallocatedAmount || 0)}
                 </div>
               </div>
             </div>
@@ -467,10 +440,10 @@ const WatavReport = () => {
                       <TableHead>Vendor</TableHead>
                       <TableHead className="text-right">Entries</TableHead>
                       <TableHead className="text-right">Customer / Standalone</TableHead>
-                      <TableHead className="text-right">Gross</TableHead>
-                      <TableHead className="text-right">Charges</TableHead>
-                      <TableHead className="text-right">Pending Net</TableHead>
-                      <TableHead className="text-right">Collected Net</TableHead>
+                      <TableHead className="text-right">Receivable</TableHead>
+                      <TableHead className="text-right">Settled</TableHead>
+                      <TableHead className="text-right">Pending</TableHead>
+                      <TableHead className="text-right">Unallocated</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -482,16 +455,16 @@ const WatavReport = () => {
                           {row.customerLinkedEntries} / {row.standaloneEntries}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatAmount(row.totalReceived)}
+                          {formatAmount(row.totalReceivable || row.totalReceived)}
                         </TableCell>
-                        <TableCell className="text-right text-amber-700">
-                          {formatAmount(row.totalPaidToWatav)}
+                        <TableCell className="text-right text-green-700">
+                          {formatAmount(row.totalSettled || row.collectedNet || 0)}
                         </TableCell>
                         <TableCell className="text-right font-semibold text-amber-800">
-                          {formatAmount(row.pendingNet)}
+                          {formatAmount(row.currentPending || row.pendingNet)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-green-700">
-                          {formatAmount(row.collectedNet)}
+                        <TableCell className="text-right">
+                          {formatAmount(row.unallocatedAmount || 0)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -500,31 +473,41 @@ const WatavReport = () => {
               </div>
             )}
 
-            {pendingSelectable.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3 rounded-md border bg-amber-50/60 p-3">
-                <Checkbox
-                  checked={
-                    selectedIds.length > 0 && selectedIds.length === pendingSelectable.length
-                  }
-                  onCheckedChange={toggleSelectAllPending}
-                />
-                <span className="text-sm">
-                  Select pending entries for combined collection ({selectedIds.length} selected)
-                </span>
-                <Input
-                  type="date"
-                  value={collectionDate}
-                  onChange={(e) => setCollectionDate(e.target.value)}
-                  className="w-[160px]"
-                />
-                <Button
-                  size="sm"
-                  disabled={selectedIds.length === 0 || collecting}
-                  onClick={handleCollect}
-                  className="bg-brand-teal hover:bg-teal-700"
-                >
-                  {collecting ? "Collecting..." : "Mark Collected"}
-                </Button>
+            {receipts.length > 0 && (
+              <div className="rounded-md border overflow-hidden">
+                <div className="bg-sidebar px-4 py-2 text-white text-sm font-medium">
+                  Vendor receipts in period
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Reference</TableHead>
+                      <TableHead className="text-right">Received</TableHead>
+                      <TableHead className="text-right">Allocated</TableHead>
+                      <TableHead className="text-right">Unallocated</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {receipts.map((receipt) => (
+                      <TableRow key={receipt.id}>
+                        <TableCell>
+                          {format(new Date(receipt.receipt_date), "yyyy-MM-dd")}
+                        </TableCell>
+                        <TableCell>{receipt.vendor?.name || "—"}</TableCell>
+                        <TableCell>{receipt.reference || receipt.type || "—"}</TableCell>
+                        <TableCell className="text-right">{formatAmount(receipt.amount)}</TableCell>
+                        <TableCell className="text-right text-green-700">
+                          {formatAmount(receipt.allocatedAmount ?? (receipt.amount - (receipt.unallocated_amount || 0)))}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatAmount(receipt.unallocatedAmount ?? (receipt.unallocated_amount || 0))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
 
@@ -532,33 +515,22 @@ const WatavReport = () => {
               <Table>
                 <TableHeader className="bg-sidebar">
                   <TableRow>
-                    <TableHead className="text-white w-10" />
                     <TableHead className="text-white">Sr.</TableHead>
                     <TableHead className="text-white">Date</TableHead>
                     <TableHead className="text-white">Vendor</TableHead>
                     <TableHead className="text-white">Customer</TableHead>
                     <TableHead className="text-white">Entry</TableHead>
                     <TableHead className="text-white">Status</TableHead>
-                    <TableHead className="text-white text-right">Gross</TableHead>
-                    <TableHead className="text-white text-right">Charges</TableHead>
-                    <TableHead className="text-white text-right">Net</TableHead>
+                    <TableHead className="text-white text-right">Original</TableHead>
+                    <TableHead className="text-white text-right">Settled</TableHead>
+                    <TableHead className="text-white text-right">Remaining</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transactions.length > 0 ? (
                     <>
-                      {transactions.map((item) => {
-                        const isPending = item.collectionStatus !== "COLLECTED";
-                        return (
+                      {transactions.map((item) => (
                           <TableRow key={item.id} className="hover:bg-sidebar/10">
-                            <TableCell>
-                              {isPending ? (
-                                <Checkbox
-                                  checked={selectedIds.includes(item.id)}
-                                  onCheckedChange={() => toggleSelect(item.id)}
-                                />
-                              ) : null}
-                            </TableCell>
                             <TableCell>{item.srno}</TableCell>
                             <TableCell>{format(new Date(item.date), "yyyy-MM-dd")}</TableCell>
                             <TableCell className="font-medium">{item.watavCustomerName}</TableCell>
@@ -571,51 +543,39 @@ const WatavReport = () => {
                               {item.entryType === "STANDALONE" ? "Standalone" : "Customer"}
                             </TableCell>
                             <TableCell>
-                              <span
-                                className={
-                                  item.collectionStatus === "COLLECTED"
-                                    ? "text-green-700 font-medium"
-                                    : "text-amber-700 font-medium"
-                                }
-                              >
-                                {item.collectionStatus === "COLLECTED" ? "Collected" : "Pending"}
+                              <span className={settlementClassName(item.collectionStatus)}>
+                                {settlementLabel(item.collectionStatus)}
                               </span>
-                              {item.collectionDate && (
-                                <div className="text-xs text-muted-foreground">
-                                  {format(new Date(item.collectionDate), "dd/MM/yyyy")}
-                                </div>
-                              )}
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatAmount(item.receivedAmount)}
+                              {formatAmount(item.originalAmount ?? item.receivedAmount)}
                             </TableCell>
-                            <TableCell className="text-right text-amber-700">
-                              {formatAmount(item.vendorCharges)}
+                            <TableCell className="text-right text-green-700">
+                              {formatAmount(item.totalSettledAmount || 0)}
                             </TableCell>
-                            <TableCell className="text-right">
-                              {formatAmount(item.netAmount)}
+                            <TableCell className="text-right font-semibold">
+                              {formatAmount(item.remainingAmount ?? 0)}
                             </TableCell>
                           </TableRow>
-                        );
-                      })}
+                      ))}
                       <TableRow className="border-t-2 border-sidebar/20">
-                        <TableCell colSpan={7} className="text-right font-medium">
+                        <TableCell colSpan={6} className="text-right font-medium">
                           Total
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatAmount(summary.totalReceived)}
+                          {formatAmount(summary.totalReceivable || summary.totalReceived)}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-amber-700">
-                          {formatAmount(summary.totalVendorCharges || summary.totalPaidToWatav)}
+                        <TableCell className="text-right font-bold text-green-700">
+                          {formatAmount(summary.totalSettled || 0)}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatAmount(summary.totalNetAmount || summary.totalActualAmount)}
+                          {formatAmount(summary.currentPending || summary.pending?.remaining || 0)}
                         </TableCell>
                       </TableRow>
                     </>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8">
+                      <TableCell colSpan={9} className="text-center py-8">
                         No watav entries found for this period
                       </TableCell>
                     </TableRow>

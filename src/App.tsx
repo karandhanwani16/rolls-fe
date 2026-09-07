@@ -42,6 +42,7 @@ import PurchaseReturnReport from "./pages/reports/PurchaseReturnReport";
 import WatavReport from "./pages/reports/WatavReport";
 import PendingWatav from "./pages/PendingWatav";
 import OutstandingReport from "./pages/reports/OutstandingReport";
+import PurchaseOutstandingReport from "./pages/reports/PurchaseOutstandingReport";
 
 const queryClient = new QueryClient();
 
@@ -270,6 +271,11 @@ const AppContent = () => {
           <Route path="/reports/outstanding" element={
             <ProtectedRoute>
               <OutstandingReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/purchase-outstanding" element={
+            <ProtectedRoute>
+              <PurchaseOutstandingReport />
             </ProtectedRoute>
           } />
 

@@ -55,6 +55,10 @@ type Purchase = {
   transport?: string;
   transport_charges?: number;
   received_by?: string;
+  credit_days?: number;
+  remaining_amount?: number;
+  payment_status?: string;
+  overdue_days?: number;
   created_at: string;
   updated_at: string;
 };
@@ -177,6 +181,8 @@ const Purchases = () => {
                     <TableHead>Supplier</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Outstanding</TableHead>
+                    <TableHead className="text-right">Overdue Days</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -184,13 +190,13 @@ const Purchases = () => {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6">
+                      <TableCell colSpan={8} className="text-center py-6">
                         Loading purchases data...
                       </TableCell>
                     </TableRow>
                   ) : filteredPurchases?.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6">
+                      <TableCell colSpan={8} className="text-center py-6">
                         No purchases found. Create your first purchase by clicking "New Purchase" above.
                       </TableCell>
                     </TableRow>
@@ -206,6 +212,24 @@ const Purchases = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           ₹{purchase.total.toLocaleString('en-IN')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {purchase.payment_status === "FULL" ? (
+                            <span className="text-green-600">Paid</span>
+                          ) : (
+                            `₹${(purchase.remaining_amount ?? purchase.total).toLocaleString('en-IN')}`
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {purchase.payment_status === "FULL" ? (
+                            "—"
+                          ) : (purchase.overdue_days || 0) > 0 ? (
+                            <span className="text-red-600 font-medium">
+                              {purchase.overdue_days} days
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate">
                           {purchase.description || '-'}

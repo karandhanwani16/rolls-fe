@@ -46,6 +46,7 @@ type Supplier = {
   city: string | null;
   opening_balance: number;
   opening_balance_date: string | null;
+  credit_days: number;
   created_at: string;
   updated_at: string;
 };
@@ -58,6 +59,7 @@ const supplierFormSchema = z.object({
   city: z.string().nullable(),
   opening_balance: z.coerce.number().default(0),
   opening_balance_date: z.string().nullable(),
+  credit_days: z.coerce.number().int().min(0).default(0),
 }).refine(
   (data) => data.opening_balance === 0 || (data.opening_balance_date && data.opening_balance_date.length > 0),
   {
@@ -88,6 +90,7 @@ const Suppliers = () => {
       city: "",
       opening_balance: 0,
       opening_balance_date: "",
+      credit_days: 0,
     },
   });
 
@@ -100,6 +103,7 @@ const Suppliers = () => {
       city: "",
       opening_balance: 0,
       opening_balance_date: "",
+      credit_days: 0,
     },
   });
 
@@ -120,6 +124,7 @@ const Suppliers = () => {
         opening_balance_date: selectedSupplier.opening_balance_date
           ? selectedSupplier.opening_balance_date.slice(0, 10)
           : "",
+        credit_days: selectedSupplier.credit_days ?? 0,
       });
     }
   }, [selectedSupplier, isEditDialogOpen, editForm]);
@@ -175,6 +180,7 @@ const Suppliers = () => {
         supplier_city: values.city,
         opening_balance: values.opening_balance,
         opening_balance_date: values.opening_balance_date || null,
+        credit_days: values.credit_days || 0,
       };
       await suppliersAPI.create(backendData);
       toast({
@@ -213,6 +219,7 @@ const Suppliers = () => {
         supplier_city: values.city,
         opening_balance: values.opening_balance,
         opening_balance_date: values.opening_balance_date || null,
+        credit_days: values.credit_days || 0,
       };
       await suppliersAPI.update(selectedSupplier.id, backendData);
       toast({
@@ -298,6 +305,7 @@ const Suppliers = () => {
                   <TableHead>Phone</TableHead>
                   <TableHead>City</TableHead>
                   <TableHead>Opening Balance</TableHead>
+                  <TableHead>Credit Days</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -305,7 +313,7 @@ const Suppliers = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Loading suppliers...
                     </TableCell>
                   </TableRow>
@@ -355,6 +363,7 @@ const Suppliers = () => {
                           "—"
                         )}
                       </TableCell>
+                      <TableCell>{supplier.credit_days ?? 0}</TableCell>
                       <TableCell className="max-w-xs truncate">
                         {supplier.description || "N/A"}
                       </TableCell>
@@ -388,7 +397,7 @@ const Suppliers = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       No suppliers found.
                     </TableCell>
                   </TableRow>
@@ -476,6 +485,25 @@ const Suppliers = () => {
                         type="date"
                         {...field}
                         value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="credit_days"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Credit Days</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        {...field}
+                        placeholder="0"
                       />
                     </FormControl>
                     <FormMessage />
@@ -601,6 +629,25 @@ const Suppliers = () => {
                         type="date"
                         {...field}
                         value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="credit_days"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Credit Days</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        {...field}
+                        placeholder="0"
                       />
                     </FormControl>
                     <FormMessage />

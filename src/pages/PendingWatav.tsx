@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { customersAPI, paymentsInAPI } from "@/services/api";
 import { getRegularCustomers, getWatavVendors } from "@/lib/partyTypes";
+import {
+  settlementClassName,
+  settlementLabel,
+} from "@/lib/watavSettlement";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Table,
@@ -22,7 +26,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -42,6 +47,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const formatAmount = (amount: number) =>
@@ -52,12 +64,21 @@ const formatAmount = (amount: number) =>
     maximumFractionDigits: 2,
   }).format(amount || 0);
 
+const instrumentTypes = [
+  { value: "cash", label: "Cash" },
+  { value: "cheque", label: "Cheque" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "upi", label: "UPI" },
+  { value: "other", label: "Other" },
+];
+
 const PendingWatav = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [byWatav, setByWatav] = useState<any[]>([]);
+  const [receipts, setReceipts] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
 
   const [startDate, setStartDate] = useState("");
@@ -72,9 +93,15 @@ const PendingWatav = () => {
   const [vendorSearch, setVendorSearch] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [collectionDate, setCollectionDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [collecting, setCollecting] = useState(false);
+  const [receiptVendorId, setReceiptVendorId] = useState("");
+  const [receiptAmount, setReceiptAmount] = useState(0);
+  const [receiptDate, setReceiptDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [receiptType, setReceiptType] = useState("cash");
+  const [receiptReference, setReceiptReference] = useState("");
+  const [receiptNotes, setReceiptNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [allocationResult, setAllocationResult] = useState<any>(null);
+  const [historyPayment, setHistoryPayment] = useState<any>(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -83,6 +110,12 @@ const PendingWatav = () => {
   useEffect(() => {
     fetchPending();
   }, [startDate, endDate, selectedVendor, entryTypeFilter]);
+
+  useEffect(() => {
+    if (selectedVendor && !receiptVendorId) {
+      setReceiptVendorId(selectedVendor);
+    }
+  }, [selectedVendor]);
 
   const fetchCustomers = async () => {
     try {
@@ -96,7 +129,6 @@ const PendingWatav = () => {
   const fetchPending = async () => {
     try {
       setLoading(true);
-      setSelectedIds([]);
       const data = await paymentsInAPI.getWatavReport({
         startDate: startDate || undefined,
         endDate: endDate || undefined,
@@ -106,6 +138,7 @@ const PendingWatav = () => {
       });
       setTransactions(data.data || []);
       setByWatav(data.byWatav || []);
+      setReceipts(data.receipts || []);
       setSummary(data.summary || null);
     } catch (error) {
       console.error("Error fetching pending watav:", error);
@@ -169,17 +202,19 @@ const PendingWatav = () => {
     const rows = filteredTransactions;
     return {
       entries: rows.length,
-      gross: rows.reduce((s, r) => s + (r.receivedAmount || 0), 0),
-      charges: rows.reduce((s, r) => s + (r.vendorCharges || 0), 0),
-      net: rows.reduce((s, r) => s + (r.netAmount || 0), 0),
+      remaining: rows.reduce((s, r) => s + (r.remainingAmount ?? r.receivedAmount ?? 0), 0),
+      settled: rows.reduce((s, r) => s + (r.totalSettledAmount || 0), 0),
+      original: rows.reduce((s, r) => s + (r.originalAmount ?? r.receivedAmount ?? 0), 0),
       customerLinkedGross: rows
         .filter((r) => r.entryType === "CUSTOMER_PAYMENT")
-        .reduce((s, r) => s + (r.receivedAmount || 0), 0),
+        .reduce((s, r) => s + (r.remainingAmount ?? r.receivedAmount ?? 0), 0),
       standaloneGross: rows
         .filter((r) => r.entryType === "STANDALONE")
-        .reduce((s, r) => s + (r.receivedAmount || 0), 0),
+        .reduce((s, r) => s + (r.remainingAmount ?? r.receivedAmount ?? 0), 0),
+      partial: rows.filter((r) => r.collectionStatus === "PARTIALLY_SETTLED").length,
+      unallocated: summary?.unallocatedAmount || 0,
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, summary]);
 
   const clearFilters = () => {
     setStartDate("");
@@ -188,7 +223,6 @@ const PendingWatav = () => {
     setSelectedCustomer("");
     setEntryTypeFilter("ALL");
     setSearchTerm("");
-    setSelectedIds([]);
   };
 
   const hasActiveFilters =
@@ -199,46 +233,50 @@ const PendingWatav = () => {
     entryTypeFilter !== "ALL" ||
     !!searchTerm;
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const toggleSelectAll = () => {
-    if (
-      selectedIds.length > 0 &&
-      selectedIds.length === filteredTransactions.length
-    ) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredTransactions.map((t) => t.id));
-    }
-  };
-
-  const handleCollect = async () => {
-    if (selectedIds.length === 0) return;
-    try {
-      setCollecting(true);
-      await paymentsInAPI.collect({
-        ids: selectedIds,
-        collection_date: collectionDate,
-      });
+  const handleReceive = async () => {
+    if (!receiptVendorId) {
       toast({
-        title: "Collected",
-        description: `Marked ${selectedIds.length} pending entr${
-          selectedIds.length === 1 ? "y" : "ies"
-        } as collected.`,
+        title: "Watav vendor required",
+        description: "Select the vendor you received money from.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!receiptAmount || receiptAmount <= 0) {
+      toast({
+        title: "Amount required",
+        description: "Enter the amount received from the vendor.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      setSaving(true);
+      const result = await paymentsInAPI.createWatavReceipt({
+        vendor_id: receiptVendorId,
+        amount: receiptAmount,
+        receipt_date: receiptDate,
+        type: receiptType,
+        reference: receiptReference || undefined,
+        description: receiptNotes || undefined,
+      });
+      setAllocationResult(result.data);
+      setReceiptAmount(0);
+      setReceiptReference("");
+      setReceiptNotes("");
+      toast({
+        title: "Vendor receipt saved",
+        description: "Amount was allocated against outstanding Watav payments (oldest first).",
       });
       await fetchPending();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to mark entries as collected",
+        description: error?.response?.data?.error || "Failed to record vendor receipt",
         variant: "destructive",
       });
     } finally {
-      setCollecting(false);
+      setSaving(false);
     }
   };
 
@@ -251,7 +289,7 @@ const PendingWatav = () => {
               <Clock3 className="mr-2" /> Pending Watav
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Money still sitting with Watav vendors — filter, select, and mark as collected
+              Customer Watav payments are already paid. Record money received from the vendor to settle the vendor receivable.
             </p>
           </div>
           {hasActiveFilters && (
@@ -260,6 +298,85 @@ const PendingWatav = () => {
               Clear filters
             </Button>
           )}
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow-sm border space-y-4">
+          <div>
+            <h2 className="font-semibold">Receive from Watav Vendor</h2>
+            <p className="text-sm text-muted-foreground">
+              Saved receipts are allocated automatically against this vendor&apos;s oldest outstanding Watav payments.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">
+                Watav vendor <span className="text-red-500">*</span>
+              </label>
+              <Select value={receiptVendorId || undefined} onValueChange={setReceiptVendorId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select vendor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {watavVendors.map((vendor) => (
+                    <SelectItem key={vendor.id} value={vendor.id}>
+                      {vendor.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">
+                Amount <span className="text-red-500">*</span>
+              </label>
+              <CurrencyInput value={receiptAmount} onChange={setReceiptAmount} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Date</label>
+              <Input
+                type="date"
+                value={receiptDate}
+                onChange={(e) => setReceiptDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Instrument</label>
+              <Select value={receiptType} onValueChange={setReceiptType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {instrumentTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Reference</label>
+              <Input
+                value={receiptReference}
+                onChange={(e) => setReceiptReference(e.target.value)}
+                placeholder="Cheque / UTR / note"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                className="w-full bg-brand-teal hover:bg-teal-700"
+                disabled={saving}
+                onClick={handleReceive}
+              >
+                {saving ? "Saving..." : "Save receipt"}
+              </Button>
+            </div>
+          </div>
+          <Textarea
+            placeholder="Notes (optional)"
+            value={receiptNotes}
+            onChange={(e) => setReceiptNotes(e.target.value)}
+          />
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm space-y-4">
@@ -322,6 +439,7 @@ const PendingWatav = () => {
                           key={customer.id}
                           onSelect={() => {
                             setSelectedVendor(customer.id);
+                            setReceiptVendorId(customer.id);
                             setVendorOpen(false);
                           }}
                         >
@@ -442,15 +560,30 @@ const PendingWatav = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow-sm p-4 border">
-            <div className="text-sm text-muted-foreground">Pending entries</div>
+            <div className="text-sm text-muted-foreground">Outstanding entries</div>
             <div className="text-2xl font-semibold mt-1">{filteredSummary.entries}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {filteredSummary.partial} partially settled
+            </div>
           </div>
           <div className="bg-white rounded-lg shadow-sm p-4 border">
-            <div className="text-sm text-muted-foreground">Pending gross</div>
-            <div className="text-2xl font-semibold mt-1 text-amber-800">
-              {formatAmount(filteredSummary.gross)}
+            <div className="text-sm text-muted-foreground">Vendor receivable</div>
+            <div className="text-2xl font-semibold mt-1">
+              {formatAmount(filteredSummary.original)}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4 border">
+            <div className="text-sm text-muted-foreground">Settled</div>
+            <div className="text-2xl font-semibold mt-1 text-green-700">
+              {formatAmount(filteredSummary.settled)}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4 border">
+            <div className="text-sm text-muted-foreground">Pending collection</div>
+            <div className="text-2xl font-bold mt-1 text-amber-900">
+              {formatAmount(filteredSummary.remaining)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               Customer {formatAmount(filteredSummary.customerLinkedGross)} · Standalone{" "}
@@ -458,15 +591,9 @@ const PendingWatav = () => {
             </div>
           </div>
           <div className="bg-white rounded-lg shadow-sm p-4 border">
-            <div className="text-sm text-muted-foreground">Vendor charges</div>
-            <div className="text-2xl font-semibold mt-1 text-amber-700">
-              {formatAmount(filteredSummary.charges)}
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 border">
-            <div className="text-sm text-muted-foreground">Net to collect</div>
-            <div className="text-2xl font-bold mt-1 text-amber-900">
-              {formatAmount(filteredSummary.net)}
+            <div className="text-sm text-muted-foreground">Unallocated receipts</div>
+            <div className="text-2xl font-semibold mt-1">
+              {formatAmount(filteredSummary.unallocated)}
             </div>
           </div>
         </div>
@@ -481,9 +608,10 @@ const PendingWatav = () => {
                 <TableRow>
                   <TableHead>Vendor</TableHead>
                   <TableHead className="text-right">Entries</TableHead>
-                  <TableHead className="text-right">Gross</TableHead>
-                  <TableHead className="text-right">Charges</TableHead>
-                  <TableHead className="text-right">Net pending</TableHead>
+                  <TableHead className="text-right">Receivable</TableHead>
+                  <TableHead className="text-right">Settled</TableHead>
+                  <TableHead className="text-right">Pending</TableHead>
+                  <TableHead className="text-right">Unallocated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -491,62 +619,29 @@ const PendingWatav = () => {
                   <TableRow
                     key={row.watavCustomerId}
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => setSelectedVendor(row.watavCustomerId)}
+                    onClick={() => {
+                      setSelectedVendor(row.watavCustomerId);
+                      setReceiptVendorId(row.watavCustomerId);
+                    }}
                   >
                     <TableCell className="font-medium">{row.watavCustomerName}</TableCell>
                     <TableCell className="text-right">{row.pendingEntries}</TableCell>
                     <TableCell className="text-right">
-                      {formatAmount(row.pendingGross)}
+                      {formatAmount(row.totalReceivable || row.pendingGross)}
                     </TableCell>
-                    <TableCell className="text-right text-amber-700">
-                      {formatAmount(row.pendingCharges)}
+                    <TableCell className="text-right text-green-700">
+                      {formatAmount(row.totalSettled || 0)}
                     </TableCell>
                     <TableCell className="text-right font-semibold text-amber-800">
-                      {formatAmount(row.pendingNet)}
+                      {formatAmount(row.currentPending || row.pendingNet)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatAmount(row.unallocatedAmount || 0)}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </div>
-        )}
-
-        {filteredTransactions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 rounded-md border bg-amber-50/70 p-3">
-            <Checkbox
-              checked={
-                selectedIds.length > 0 &&
-                selectedIds.length === filteredTransactions.length
-              }
-              onCheckedChange={toggleSelectAll}
-            />
-            <span className="text-sm">
-              {selectedIds.length} of {filteredTransactions.length} selected
-            </span>
-            <Input
-              type="date"
-              value={collectionDate}
-              onChange={(e) => setCollectionDate(e.target.value)}
-              className="w-[160px]"
-            />
-            <Button
-              size="sm"
-              disabled={selectedIds.length === 0 || collecting}
-              onClick={handleCollect}
-              className="bg-brand-teal hover:bg-teal-700"
-            >
-              {collecting ? "Collecting..." : "Mark Collected"}
-            </Button>
-            {selectedIds.length > 0 && (
-              <span className="text-sm font-medium text-amber-900">
-                Net selected:{" "}
-                {formatAmount(
-                  filteredTransactions
-                    .filter((t) => selectedIds.includes(t.id))
-                    .reduce((s, t) => s + (t.netAmount || 0), 0)
-                )}
-              </span>
-            )}
           </div>
         )}
 
@@ -559,29 +654,25 @@ const PendingWatav = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10" />
                   <TableHead>Date</TableHead>
                   <TableHead>Vendor</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Entry</TableHead>
-                  <TableHead className="text-right">Gross</TableHead>
-                  <TableHead className="text-right">Discount</TableHead>
-                  <TableHead className="text-right">Settles</TableHead>
-                  <TableHead className="text-right">Charges</TableHead>
-                  <TableHead className="text-right">Net</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Original</TableHead>
+                  <TableHead className="text-right">Settled</TableHead>
+                  <TableHead className="text-right">Remaining</TableHead>
                   <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredTransactions.length > 0 ? (
                   filteredTransactions.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedIds.includes(item.id)}
-                          onCheckedChange={() => toggleSelect(item.id)}
-                        />
-                      </TableCell>
+                    <TableRow
+                      key={item.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => setHistoryPayment(item)}
+                    >
                       <TableCell>
                         {format(new Date(item.date), "dd/MM/yyyy")}
                       </TableCell>
@@ -594,22 +685,19 @@ const PendingWatav = () => {
                       <TableCell>
                         {item.entryType === "STANDALONE" ? "Standalone" : "Customer"}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {formatAmount(item.receivedAmount)}
+                      <TableCell>
+                        <span className={settlementClassName(item.collectionStatus)}>
+                          {settlementLabel(item.collectionStatus)}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        {(item.discount || 0) > 0 ? formatAmount(item.discount) : "—"}
+                        {formatAmount(item.originalAmount ?? item.receivedAmount)}
                       </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {item.entryType === "STANDALONE"
-                          ? "—"
-                          : formatAmount(item.customerSettled ?? item.receivedAmount + (item.discount || 0))}
-                      </TableCell>
-                      <TableCell className="text-right text-amber-700">
-                        {formatAmount(item.vendorCharges)}
+                      <TableCell className="text-right text-green-700">
+                        {formatAmount(item.totalSettledAmount || 0)}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {formatAmount(item.netAmount)}
+                        {formatAmount(item.remainingAmount ?? item.receivedAmount)}
                       </TableCell>
                       <TableCell className="max-w-[180px] truncate text-muted-foreground">
                         {item.description || "—"}
@@ -618,7 +706,7 @@ const PendingWatav = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                       No pending Watav entries match these filters
                     </TableCell>
                   </TableRow>
@@ -628,14 +716,215 @@ const PendingWatav = () => {
           )}
         </div>
 
-        {summary?.pending && !hasActiveFilters && (
-          <p className="text-xs text-muted-foreground">
-            Showing all pending Watav entries currently with vendors.
-          </p>
+        {receipts.length > 0 && (
+          <div className="rounded-md border overflow-hidden bg-white">
+            <div className="bg-sidebar px-4 py-2 text-white text-sm font-medium">
+              Vendor receipts
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead className="text-right">Received</TableHead>
+                  <TableHead className="text-right">Allocated</TableHead>
+                  <TableHead className="text-right">Unallocated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {receipts.map((receipt) => (
+                  <TableRow
+                    key={receipt.id}
+                    className="cursor-pointer"
+                    onClick={() => setAllocationResult(receipt)}
+                  >
+                    <TableCell>
+                      {format(new Date(receipt.receipt_date), "dd/MM/yyyy")}
+                    </TableCell>
+                    <TableCell>{receipt.vendor?.name || "—"}</TableCell>
+                    <TableCell>{receipt.reference || receipt.type || "—"}</TableCell>
+                    <TableCell className="text-right">{formatAmount(receipt.amount)}</TableCell>
+                    <TableCell className="text-right text-green-700">
+                      {formatAmount(receipt.allocatedAmount ?? (receipt.amount - (receipt.unallocated_amount || 0)))}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatAmount(receipt.unallocatedAmount ?? (receipt.unallocated_amount || 0))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
+
+      <AllocationDialog
+        receipt={allocationResult}
+        onClose={() => setAllocationResult(null)}
+      />
+      <PaymentHistoryDialog
+        payment={historyPayment}
+        onClose={() => setHistoryPayment(null)}
+      />
     </DashboardLayout>
   );
 };
+
+function AllocationDialog({
+  receipt,
+  onClose,
+}: {
+  receipt: any;
+  onClose: () => void;
+}) {
+  if (!receipt) return null;
+  const allocations = receipt.allocations || [];
+  return (
+    <Dialog open={!!receipt} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[640px]">
+        <DialogHeader>
+          <DialogTitle>Vendor receipt allocation</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-3 gap-3 text-sm">
+          <div>
+            <div className="text-muted-foreground">Received</div>
+            <div className="font-semibold">{formatAmount(receipt.amount)}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Allocated</div>
+            <div className="font-semibold text-green-700">
+              {formatAmount(receipt.allocatedAmount ?? (receipt.amount - (receipt.unallocated_amount || 0)))}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Unallocated</div>
+            <div className="font-semibold">
+              {formatAmount(receipt.unallocatedAmount ?? (receipt.unallocated_amount || 0))}
+            </div>
+          </div>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Payment date</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead className="text-right">Allocated</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {allocations.length > 0 ? (
+              allocations.map((row: any) => (
+                <TableRow key={row.id || row.payment_in_id}>
+                  <TableCell>
+                    {row.paymentDate
+                      ? format(new Date(row.paymentDate), "dd/MM/yyyy")
+                      : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {row.actualCustomerName || (
+                      <span className="italic text-muted-foreground">Standalone</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatAmount(row.allocated_amount ?? row.allocatedAmount)}
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  No outstanding payments — entire amount is unallocated vendor credit
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PaymentHistoryDialog({
+  payment,
+  onClose,
+}: {
+  payment: any;
+  onClose: () => void;
+}) {
+  if (!payment) return null;
+  const allocations = payment.allocations || payment.watav_allocations || [];
+  return (
+    <Dialog open={!!payment} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[640px]">
+        <DialogHeader>
+          <DialogTitle>Watav payment settlement</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-3 gap-3 text-sm">
+          <div>
+            <div className="text-muted-foreground">Original</div>
+            <div className="font-semibold">
+              {formatAmount(payment.originalAmount ?? payment.receivedAmount)}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Settled</div>
+            <div className="font-semibold text-green-700">
+              {formatAmount(payment.totalSettledAmount || 0)}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Remaining</div>
+            <div className="font-semibold">
+              {formatAmount(payment.remainingAmount ?? 0)}
+            </div>
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Customer {payment.actualCustomerName || "None"} already has this amount as a completed payment.
+          Vendor status: {settlementLabel(payment.collectionStatus || payment.settlementStatus)}.
+        </p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Receipt date</TableHead>
+              <TableHead>Reference</TableHead>
+              <TableHead className="text-right">Allocated</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {allocations.length > 0 ? (
+              allocations.map((row: any) => (
+                <TableRow key={row.id}>
+                  <TableCell>
+                    {row.receiptDate
+                      ? format(new Date(row.receiptDate), "dd/MM/yyyy")
+                      : "—"}
+                  </TableCell>
+                  <TableCell>{row.receiptReference || "—"}</TableCell>
+                  <TableCell className="text-right">
+                    {formatAmount(row.allocatedAmount ?? row.allocated_amount)}
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  No vendor receipts allocated yet
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default PendingWatav;

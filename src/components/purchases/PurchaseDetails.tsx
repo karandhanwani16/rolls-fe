@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Calendar, Truck, Warehouse, User, FileText, DollarSign } from 'lucide-react';
+import { Calendar, Truck, Warehouse, User, FileText, DollarSign, Clock } from 'lucide-react';
 import { useFormSectionNavigation } from '@/lib/formKeyboardNavigation';
 import QuantityUnitSelect from '@/components/ui/quantity-unit-select';
 import { DEFAULT_QUANTITY_UNIT } from '@/lib/quantityUnits';
@@ -88,6 +88,7 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                                     ...formData,
                                     supplier_id: value,
                                     supplier_name: supplier?.name || '',
+                                    credit_days: supplier?.credit_days ?? formData.credit_days ?? 0,
                                 });
                             }}
                         >
@@ -119,6 +120,30 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                             value={formData?.total_amount}
                             readOnly
                             className="bg-gray-50 font-medium text-brand-teal"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="credit_days" className="text-sm font-medium">
+                            <span className="flex items-center gap-1">
+                                <Clock className="h-3.5 w-3.5 text-gray-500" />
+                                Credit Days
+                            </span>
+                        </Label>
+                        <Input
+                            id="credit_days"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={formData.credit_days ?? 0}
+                            onChange={(e) =>
+                                setFormData({
+                                    ...formData,
+                                    credit_days: parseInt(e.target.value, 10) || 0,
+                                })
+                            }
+                            placeholder="0"
+                            className="focus-visible:ring-brand-teal"
                         />
                     </div>
 

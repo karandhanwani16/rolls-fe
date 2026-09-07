@@ -360,6 +360,43 @@ export const paymentsInAPI = {
     const response = await api.post('/payments-in/uncollect', data);
     return response.data;
   },
+  getWatavReceipts: async ({
+    vendorId,
+    startDate,
+    endDate,
+  }: {
+    vendorId?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {}) => {
+    const response = await api.get('/payments-in/watav-receipts', {
+      params: {
+        ...(vendorId ? { vendorId } : {}),
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+      },
+    });
+    return response.data;
+  },
+  getWatavReceipt: async (id: string) => {
+    const response = await api.get(`/payments-in/watav-receipts/${id}`);
+    return response.data;
+  },
+  createWatavReceipt: async (data: {
+    vendor_id: string;
+    amount: number;
+    receipt_date?: string | Date;
+    type?: string;
+    reference?: string;
+    description?: string;
+  }) => {
+    const response = await api.post('/payments-in/watav-receipts', data);
+    return response.data;
+  },
+  deleteWatavReceipt: async (id: string) => {
+    const response = await api.delete(`/payments-in/watav-receipts/${id}`);
+    return response.data;
+  },
   create: async (data: any) => {
     const response = await api.post('/payments-in', data);
     return response.data;

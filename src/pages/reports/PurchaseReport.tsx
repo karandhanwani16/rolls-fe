@@ -120,6 +120,9 @@ const PurchaseReport = () => {
       "Supplier Name", 
       "Date", 
       "Total", 
+      "Outstanding",
+      "Credit Days",
+      "Overdue Days",
       "Godown",
       "Transport",
       "Transport Charges",
@@ -134,6 +137,9 @@ const PurchaseReport = () => {
           `"${purchase.supplier_name || ''}"`,
           format(new Date(purchase.date), "yyyy-MM-dd"),
           purchase.total,
+          purchase.remaining_amount ?? purchase.total,
+          purchase.credit_days || 0,
+          purchase.overdue_days || 0,
           `"${purchase.godown || ''}"`,
           `"${purchase.transport || ''}"`,
           purchase.transport_charges || 0,
@@ -159,6 +165,11 @@ const PurchaseReport = () => {
       ? suppliers.filter(s => selectedSuppliers.includes(s.id)).map(s => s.name).join(", ")
       : "All Suppliers";
     const totalAmount = filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0);
+    const totalOutstanding = filteredPurchases.reduce(
+      (sum, purchase) =>
+        sum + (purchase.payment_status === "FULL" ? 0 : (purchase.remaining_amount ?? purchase.total)),
+      0
+    );
 
     downloadReportPdf({
       title: "Purchase Report",
@@ -170,26 +181,39 @@ const PurchaseReport = () => {
         { label: "Bills", value: String(filteredPurchases.length) },
       ],
       summary: [
-        { label: "Total Purchases", value: formatPdfAmount(totalAmount), emphasize: true },
+        { label: "Total Purchases", value: formatPdfAmount(totalAmount) },
         { label: "Number of Purchases", value: String(filteredPurchases.length) },
+        { label: "Outstanding", value: formatPdfAmount(totalOutstanding), emphasize: true },
       ],
       columns: [
         { header: "Purchase No", width: 28, align: "center" },
         { header: "Supplier", align: "left" },
         { header: "Date", width: 26, align: "center" },
         { header: "Total", width: 34, align: "right" },
-        { header: "Godown", width: 36 },
-        { header: "Received By", width: 36 },
+        { header: "Outstanding", width: 34, align: "right" },
+        { header: "Overdue", width: 22, align: "center" },
+        { header: "Credit Days", width: 24, align: "center" },
       ],
       rows: filteredPurchases.map((purchase) => [
         purchase.purchase_no || "—",
         purchase.supplier_name || "—",
         formatPdfDate(purchase.date),
         formatPdfAmount(purchase.total, { prefix: false }),
-        purchase.godown || "—",
-        purchase.received_by || "—",
+        purchase.payment_status === "FULL"
+          ? "Paid"
+          : formatPdfAmount(purchase.remaining_amount ?? purchase.total, { prefix: false }),
+        purchase.payment_status === "FULL" ? "—" : String(purchase.overdue_days || 0),
+        String(purchase.credit_days || 0),
       ]),
-      foot: ["", "", "Total", formatPdfAmount(totalAmount, { prefix: false }), "", ""],
+      foot: [
+        "",
+        "",
+        "Total",
+        formatPdfAmount(totalAmount, { prefix: false }),
+        formatPdfAmount(totalOutstanding, { prefix: false }),
+        "",
+        "",
+      ],
     });
   };
 
@@ -326,9 +350,21 @@ const PurchaseReport = () => {
                       {formatAmount(filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0))}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Number of Purchases</span>
                     <span className="font-medium">{filteredPurchases.length}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Outstanding</span>
+                    <span className="font-medium text-red-600">
+                      {formatAmount(
+                        filteredPurchases.reduce(
+                          (sum, purchase) =>
+                            sum + (purchase.payment_status === "FULL" ? 0 : (purchase.remaining_amount ?? purchase.total)),
+                          0
+                        )
+                      )}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -342,8 +378,9 @@ const PurchaseReport = () => {
                     <TableHead className="text-white">Supplier</TableHead>
                     <TableHead className="text-white">Date</TableHead>
                     <TableHead className="text-white">Total</TableHead>
-                    <TableHead className="text-white">Godown</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Received By</TableHead>
+                    <TableHead className="text-white">Outstanding</TableHead>
+                    <TableHead className="text-white">Credit Days</TableHead>
+                    <TableHead className="text-white rounded-tr-lg">Overdue Days</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -357,8 +394,21 @@ const PurchaseReport = () => {
                           <TableCell className="text-right">
                             {formatAmount(purchase.total)}
                           </TableCell>
-                          <TableCell>{purchase.godown || "-"}</TableCell>
-                          <TableCell>{purchase.received_by || "-"}</TableCell>
+                          <TableCell className="text-right">
+                            {purchase.payment_status === "FULL"
+                              ? "Paid"
+                              : formatAmount(purchase.remaining_amount ?? purchase.total)}
+                          </TableCell>
+                          <TableCell className="text-right">{purchase.credit_days ?? 0}</TableCell>
+                          <TableCell className="text-right">
+                            {purchase.payment_status === "FULL" ? (
+                              "—"
+                            ) : (purchase.overdue_days || 0) > 0 ? (
+                              <span className="text-red-600 font-medium">{purchase.overdue_days}</span>
+                            ) : (
+                              0
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="border-t-2 border-sidebar/20">
@@ -366,12 +416,21 @@ const PurchaseReport = () => {
                         <TableCell className="text-right font-medium">
                           {formatAmount(filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0))}
                         </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatAmount(
+                            filteredPurchases.reduce(
+                              (sum, purchase) =>
+                                sum + (purchase.payment_status === "FULL" ? 0 : (purchase.remaining_amount ?? purchase.total)),
+                              0
+                            )
+                          )}
+                        </TableCell>
                         <TableCell colSpan={2}></TableCell>
                       </TableRow>
                     </>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
+                      <TableCell colSpan={7} className="text-center py-8">
                         No purchase data found
                       </TableCell>
                     </TableRow>
