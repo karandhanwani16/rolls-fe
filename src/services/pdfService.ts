@@ -45,10 +45,10 @@ class PdfService {
       doc.text('SALES INVOICE', pageWidth / 2, 20, { align: 'center' });
 
       doc.setFontSize(12);
-      doc.text('Mohit Traders', pageWidth / 2, 30, { align: 'center' });
+      doc.text('T. A. TEX', pageWidth / 2, 30, { align: 'center' });
       doc.setFontSize(10);
-      doc.text('123 Business Street, City, State, PIN', pageWidth / 2, 35, { align: 'center' });
-      doc.text('Phone: +91 9876543210 | Email: info@mohittraders.com', pageWidth / 2, 40, { align: 'center' });
+      doc.text('ULHASNAGAR 421005', pageWidth / 2, 35, { align: 'center' });
+      doc.text('Phone: +91 9876543210', pageWidth / 2, 40, { align: 'center' });
 
       // Add horizontal line
       doc.setDrawColor(0);
@@ -82,7 +82,7 @@ class PdfService {
           item.product_name || '-',
           item.roll_no || '-',
           item.shade || '-',
-          `${item.meters.toFixed(2)} ${item.unit || 'm'}`,
+          `${item.meters.toFixed(2)}`,
           item.price.toFixed(2),
           (item.total ?? item.total_price).toFixed(2)
         ];

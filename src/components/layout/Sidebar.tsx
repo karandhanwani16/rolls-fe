@@ -356,7 +356,7 @@ const Sidebar = () => {
     <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
       {showLabels && (
         <div>
-          <h1 className="font-bold text-xl">Mohit Traders</h1>
+          <h1 className="font-bold text-xl">T. A. TEX</h1>
           {user && (
             <p className="text-xs text-sidebar-foreground/70">
               {user.full_name || "User"}

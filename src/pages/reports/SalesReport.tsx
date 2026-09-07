@@ -121,7 +121,6 @@ const SalesReport = () => {
       "Date", 
       "Total", 
       "Description",
-      "Hamaal",
       "Transport Charges",
       "Discount",
       "Credit Days",
@@ -137,7 +136,6 @@ const SalesReport = () => {
           format(new Date(sale.date), "yyyy-MM-dd"),
           sale.total,
           `"${sale.description || ''}"`,
-          `"${sale.hamaal || ''}"`,
           sale.transport_charges || 0,
           sale.discount || 0,
           sale.credit_days || 0,
@@ -170,7 +168,7 @@ const SalesReport = () => {
     // Add company header
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text("Mohit Traders", pageWidth / 2, 15, { align: "center" });
+    doc.text("T. A. TEX", pageWidth / 2, 15, { align: "center" });
 
     // Add report title
     doc.setFontSize(14);

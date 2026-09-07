@@ -51,7 +51,6 @@ interface SalesFormData {
   total_amount: number;
   description?: string;
   godown_no?: string;
-  hamaal?: string;
   challan_no?: string;
   maker?: string;
   transport_charges?: number;
@@ -258,7 +257,6 @@ const SalesForm = () => {
             total_amount: response.total,
             description: response.description,
             godown_no: response.godown?.id || "",
-            hamaal: response.hamaal,
             challan_no: response.challan_no,
             maker: response.maker,
             transport_charges: response.transport_charges || 0,

@@ -86,7 +86,7 @@ const PurchaseReturnReport = () => {
   const exportToPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(16);
-    doc.text("Mohit Traders", 105, 15, { align: "center" });
+    doc.text("T. A. TEX", 105, 15, { align: "center" });
     doc.setFontSize(14);
     doc.text("Purchase Return Report", 105, 25, { align: "center" });
     autoTable(doc, {

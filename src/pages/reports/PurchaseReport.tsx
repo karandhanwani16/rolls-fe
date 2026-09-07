@@ -167,7 +167,7 @@ const PurchaseReport = () => {
     // Add company header
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text("Mohit Traders", pageWidth / 2, 15, { align: "center" });
+    doc.text("T. A. TEX", pageWidth / 2, 15, { align: "center" });
 
     // Add report title
     doc.setFontSize(14);

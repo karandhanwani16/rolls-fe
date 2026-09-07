@@ -263,7 +263,7 @@ const WatavReport = () => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
-    doc.text("Mohit Traders", pageWidth / 2, 15, { align: "center" });
+    doc.text("T. A. TEX", pageWidth / 2, 15, { align: "center" });
     doc.setFontSize(14);
     doc.text("Watav Report", pageWidth / 2, 25, { align: "center" });
 
