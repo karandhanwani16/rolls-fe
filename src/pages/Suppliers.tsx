@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -29,13 +29,16 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { FileText, Plus, Search, Phone, MapPin, Edit, Trash, Loader2 } from "lucide-react";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
+import { FileText, Plus, Phone, MapPin, Edit, Trash, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { suppliersAPI } from "@/services/api";
+import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
 
 // Supplier type definition
 type Supplier = {
@@ -72,7 +75,6 @@ type SupplierFormValues = z.infer<typeof supplierFormSchema>;
 
 const Suppliers = () => {
   const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -155,11 +157,65 @@ const Suppliers = () => {
     }
   }, [error, toast]);
 
-  const filteredSuppliers = suppliers?.filter((supplier) =>
-    supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (supplier.phone && supplier.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (supplier.city && supplier.city.toLowerCase().includes(searchTerm.toLowerCase()))
-  ) || [];
+  const searchFns = useMemo(
+    () => [
+      (item: Supplier) => item.name,
+      (item: Supplier) => item.phone,
+      (item: Supplier) => item.city,
+      (item: Supplier) => item.description,
+    ],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (item: Supplier, key: string) => {
+      switch (key) {
+        case "name":
+          return item.name;
+        case "phone":
+          return item.phone;
+        case "city":
+          return item.city;
+        case "opening_balance":
+          return item.opening_balance;
+        case "credit_days":
+          return item.credit_days;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "city",
+        label: "City",
+        options: uniqueOptions(suppliers?.map((i) => i.city) || []),
+        predicate: (item: Supplier, value: string) => item.city === value,
+      },
+    ],
+    [suppliers]
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: suppliers,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "name", direction: "asc" },
+  });
 
   const onSubmit = async (values: SupplierFormValues) => {
     if (!user) {
@@ -287,25 +343,25 @@ const Suppliers = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search suppliers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search suppliers..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead>Opening Balance</TableHead>
-                  <TableHead>Credit Days</TableHead>
+                  <SortableHeader label="Name" sortKey="name" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Phone" sortKey="phone" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="City" sortKey="city" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Opening Balance" sortKey="opening_balance" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Credit Days" sortKey="credit_days" sort={sort} onSort={toggleSort} />
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -317,8 +373,8 @@ const Suppliers = () => {
                       Loading suppliers...
                     </TableCell>
                   </TableRow>
-                ) : filteredSuppliers.length > 0 ? (
-                  filteredSuppliers.map((supplier) => (
+                ) : rows.length > 0 ? (
+                  rows.map((supplier) => (
                     <TableRow key={supplier.id}>
                       <TableCell className="font-medium">
                         {supplier.name}

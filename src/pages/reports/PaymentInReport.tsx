@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { paymentsInAPI } from "@/services/api";
 import { useToast } from "@/components/ui/use-toast";
@@ -7,7 +6,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -21,11 +19,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
 
 const PaymentInReport = () => {
   const [paymentsIn, setPaymentsIn] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filteredPayments, setFilteredPayments] = useState<any[]>([]);
+  const [dateFiltered, setDateFiltered] = useState<any[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -38,7 +38,7 @@ const PaymentInReport = () => {
       const response = await paymentsInAPI.getAll();
       const payments = response.data || [];
       setPaymentsIn(payments);
-      setFilteredPayments(payments);
+      setDateFiltered(payments);
     } catch (error) {
       console.error("Error fetching payments in:", error);
       toast({
@@ -59,20 +59,50 @@ const PaymentInReport = () => {
       return paymentDate >= startDate && paymentDate <= endDate;
     });
     
-    setFilteredPayments(filtered);
+    setDateFiltered(filtered);
   };
 
+  const getSortValue = useMemo(
+    () => (payment: any, key: string) => {
+      switch (key) {
+        case "party":
+          return payment.customer?.name || "";
+        case "customer_type":
+          return payment.customer_type || "";
+        case "received":
+          return payment.received_amount ?? 0;
+        case "actual":
+          return payment.actual_amount ?? 0;
+        case "charges":
+          return payment.charges ?? 0;
+        case "type":
+          return payment.type || "";
+        case "date":
+          return payment.created_at ? new Date(payment.created_at) : null;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const { sort, toggleSort, rows } = useTableControls({
+    data: dateFiltered,
+    getSortValue,
+    defaultSort: { key: "date", direction: "desc" },
+  });
+
   const exportToPDF = () => {
-    const totalReceived = filteredPayments.reduce((sum, p) => sum + (p.received_amount || 0), 0);
-    const totalActual = filteredPayments.reduce((sum, p) => sum + (p.actual_amount || 0), 0);
-    const totalCharges = filteredPayments.reduce((sum, p) => sum + (p.charges || 0), 0);
+    const totalReceived = rows.reduce((sum, p) => sum + (p.received_amount || 0), 0);
+    const totalActual = rows.reduce((sum, p) => sum + (p.actual_amount || 0), 0);
+    const totalCharges = rows.reduce((sum, p) => sum + (p.charges || 0), 0);
 
     downloadReportPdf({
       title: "Payments In Report",
       filename: `payments_in_report_${format(new Date(), "yyyy-MM-dd")}.pdf`,
       orientation: "landscape",
       meta: [
-        { label: "Entries", value: String(filteredPayments.length) },
+        { label: "Entries", value: String(rows.length) },
         { label: "Generated", value: format(new Date(), "dd/MM/yyyy HH:mm") },
       ],
       summary: [
@@ -89,7 +119,7 @@ const PaymentInReport = () => {
         { header: "Payment Type", width: 32, align: "center" },
         { header: "Date", width: 28, align: "center" },
       ],
-      rows: filteredPayments.map((payment) => [
+      rows: rows.map((payment) => [
         payment.customer ? payment.customer.name : "—",
         payment.customer_type || "—",
         formatPdfAmount(payment.received_amount, { prefix: false }),
@@ -111,7 +141,6 @@ const PaymentInReport = () => {
   };
 
   const exportToCSV = () => {
-    // Create CSV content
     const headers = [
       "Customer Type", 
       "Customer", 
@@ -123,7 +152,7 @@ const PaymentInReport = () => {
     ];
     const csvContent = [
       headers.join(","),
-      ...filteredPayments.map((payment) => {
+      ...rows.map((payment) => {
         return [
           `"${payment.customer_type || ''}"`,
           `"${payment.customer ? payment.customer.name : ''}"`,
@@ -136,7 +165,6 @@ const PaymentInReport = () => {
       }),
     ].join("\n");
 
-    // Create and download CSV file
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -184,18 +212,18 @@ const PaymentInReport = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Received Amount</TableHead>
-                <TableHead className="text-right">Actual Amount</TableHead>
-                <TableHead className="text-right">Charges</TableHead>
-                <TableHead>Payment Type</TableHead>
-                <TableHead>Date</TableHead>
+                <SortableHeader label="Customer" sortKey="party" sort={sort} onSort={toggleSort} />
+                <SortableHeader label="Type" sortKey="customer_type" sort={sort} onSort={toggleSort} />
+                <SortableHeader label="Received Amount" sortKey="received" sort={sort} onSort={toggleSort} align="right" className="text-right" />
+                <SortableHeader label="Actual Amount" sortKey="actual" sort={sort} onSort={toggleSort} align="right" className="text-right" />
+                <SortableHeader label="Charges" sortKey="charges" sort={sort} onSort={toggleSort} align="right" className="text-right" />
+                <SortableHeader label="Payment Type" sortKey="type" sort={sort} onSort={toggleSort} />
+                <SortableHeader label="Date" sortKey="date" sort={sort} onSort={toggleSort} />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPayments.length > 0 ? (
-                filteredPayments.map((payment) => (
+              {rows.length > 0 ? (
+                rows.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell className="font-medium">
                       {payment.customer ? payment.customer.name : "-"}

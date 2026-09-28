@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -30,10 +30,11 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 import {
   Handshake,
   Plus,
-  Search,
   Edit,
   Trash,
   Loader2,
@@ -45,6 +46,7 @@ import * as z from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { customersAPI } from "@/services/api";
 import { WATAV_CUSTOMER_TYPE, getWatavVendors } from "@/lib/partyTypes";
+import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
 
 type Vendor = {
   id: string;
@@ -90,7 +92,6 @@ const emptyValues: VendorFormValues = {
 };
 
 const WatavVendors = () => {
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -135,13 +136,63 @@ const WatavVendors = () => {
     }
   }, [error, toast]);
 
-  const filteredVendors =
-    vendors?.filter(
-      (vendor) =>
-        vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (vendor.phone && vendor.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (vendor.city && vendor.city.toLowerCase().includes(searchTerm.toLowerCase()))
-    ) || [];
+  const searchFns = useMemo(
+    () => [
+      (item: Vendor) => item.name,
+      (item: Vendor) => item.phone,
+      (item: Vendor) => item.city,
+      (item: Vendor) => item.description,
+    ],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (item: Vendor, key: string) => {
+      switch (key) {
+        case "name":
+          return item.name;
+        case "phone":
+          return item.phone;
+        case "city":
+          return item.city;
+        case "opening_balance":
+          return item.opening_balance;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "city",
+        label: "City",
+        options: uniqueOptions(vendors?.map((i) => i.city) || []),
+        predicate: (item: Vendor, value: string) => item.city === value,
+      },
+    ],
+    [vendors]
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: vendors,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "name", direction: "asc" },
+  });
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-IN", {
@@ -375,24 +426,24 @@ const WatavVendors = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search Watav vendors..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search Watav vendors..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Vendor Name</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead>Opening Balance</TableHead>
+                  <SortableHeader label="Vendor Name" sortKey="name" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Phone" sortKey="phone" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="City" sortKey="city" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Opening Balance" sortKey="opening_balance" sort={sort} onSort={toggleSort} />
                   <TableHead>Notes</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -405,8 +456,8 @@ const WatavVendors = () => {
                       Loading...
                     </TableCell>
                   </TableRow>
-                ) : filteredVendors.length > 0 ? (
-                  filteredVendors.map((vendor) => (
+                ) : rows.length > 0 ? (
+                  rows.map((vendor) => (
                     <TableRow key={vendor.id}>
                       <TableCell className="font-medium">{vendor.name}</TableCell>
                       <TableCell>{vendor.phone || "—"}</TableCell>

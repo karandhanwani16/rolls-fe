@@ -38,10 +38,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { CreditCard, Plus, Search, Edit, Trash2 } from "lucide-react";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
+import { CreditCard, Plus, Edit, Trash2 } from "lucide-react";
 import { paymentsInAPI, customersAPI } from "@/services/api";
 import { getRegularCustomers, getWatavVendors } from "@/lib/partyTypes";
 import {
+  normalizeSettlementStatus,
   settlementClassName,
   settlementLabel,
 } from "@/lib/watavSettlement";
@@ -50,6 +53,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useTableControls } from "@/hooks/useTableControls";
 
 const instrumentTypes = [
   { value: "cash", label: "Cash" },
@@ -117,7 +121,6 @@ const defaultFormValues: PaymentInFormValues = {
 };
 
 const PaymentsIn = () => {
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentPaymentIn, setCurrentPaymentIn] = useState<any>(null);
@@ -219,16 +222,103 @@ const PaymentsIn = () => {
   useNormalReceiveSync(addForm);
   useNormalReceiveSync(editForm);
 
-  const filteredPayments = paymentsInData?.filter((payment: any) => {
-    const q = searchTerm.toLowerCase();
-    return (
-      payment.description?.toLowerCase().includes(q) ||
-      payment.type?.toLowerCase().includes(q) ||
-      payment.actual_customer?.name?.toLowerCase().includes(q) ||
-      payment.receive_customer?.name?.toLowerCase().includes(q) ||
-      payment.payment_category?.toLowerCase().includes(q) ||
-      payment.entry_type?.toLowerCase().includes(q)
-    );
+  const searchFns = useMemo(
+    () => [
+      (p: any) => p.description,
+      (p: any) => p.type,
+      (p: any) => p.actual_customer?.name,
+      (p: any) => p.receive_customer?.name,
+      (p: any) => p.payment_category,
+      (p: any) => p.entry_type,
+    ],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (p: any, key: string) => {
+      switch (key) {
+        case "payment_category":
+          return p.payment_category || inferCategory(p);
+        case "customer":
+          return p.actual_customer?.name;
+        case "vendor":
+          return p.receive_customer?.name;
+        case "received_amount":
+          return p.received_amount ?? 0;
+        case "discount":
+          return p.discount ?? 0;
+        case "settles": {
+          const category = p.payment_category || inferCategory(p);
+          const isStandalone =
+            p.entry_type === "STANDALONE" || (category === "VATAV" && !p.actual_id);
+          return isStandalone ? 0 : (p.received_amount || 0) + (p.discount || 0);
+        }
+        case "charges":
+          return p.charges ?? 0;
+        case "net":
+          return p.actual_amount ?? 0;
+        case "collection":
+          return normalizeSettlementStatus(p.settlementStatus || p.collection_status);
+        case "type":
+          return p.type;
+        case "payment_date":
+          return p.payment_date ? new Date(p.payment_date) : null;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "category",
+        label: "Category",
+        options: [
+          { value: "NORMAL", label: "Normal" },
+          { value: "VATAV", label: "Watav" },
+        ],
+        predicate: (p: any, value: string) =>
+          (p.payment_category || inferCategory(p)) === value,
+      },
+      {
+        key: "instrument",
+        label: "Instrument",
+        options: instrumentTypes,
+        predicate: (p: any, value: string) => p.type === value,
+      },
+      {
+        key: "collection",
+        label: "Collection",
+        options: [
+          { value: "PENDING", label: "Pending" },
+          { value: "PARTIALLY_SETTLED", label: "Partially settled" },
+          { value: "COMPLETED", label: "Completed" },
+        ],
+        predicate: (p: any, value: string) =>
+          normalizeSettlementStatus(p.settlementStatus || p.collection_status) === value,
+      },
+    ],
+    []
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: paymentsInData,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "payment_date", direction: "desc" },
   });
 
   const handleEdit = (payment: any) => {
@@ -282,31 +372,31 @@ const PaymentsIn = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search by customer, vendor, type..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search by customer, vendor, type..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Watav Vendor</TableHead>
-                  <TableHead>Received</TableHead>
-                  <TableHead>Discount</TableHead>
-                  <TableHead>Settles</TableHead>
-                  <TableHead>Charges</TableHead>
-                  <TableHead>Net</TableHead>
-                  <TableHead>Collection</TableHead>
-                  <TableHead>Instrument</TableHead>
-                  <TableHead>Date</TableHead>
+                  <SortableHeader label="Category" sortKey="payment_category" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Customer" sortKey="customer" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Watav Vendor" sortKey="vendor" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Received" sortKey="received_amount" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Discount" sortKey="discount" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Settles" sortKey="settles" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Charges" sortKey="charges" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Net" sortKey="net" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Collection" sortKey="collection" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Instrument" sortKey="type" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Date" sortKey="payment_date" sort={sort} onSort={toggleSort} />
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -317,8 +407,8 @@ const PaymentsIn = () => {
                       Loading...
                     </TableCell>
                   </TableRow>
-                ) : filteredPayments?.length > 0 ? (
-                  filteredPayments.map((payment: any) => {
+                ) : rows.length > 0 ? (
+                  rows.map((payment: any) => {
                     const category = payment.payment_category || inferCategory(payment);
                     const isVatav = category === "VATAV";
                     const isStandalone =

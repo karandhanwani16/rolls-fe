@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -20,6 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { useTableControls } from "@/hooks/useTableControls";
 import { format } from "date-fns";
 import {
   Card,
@@ -235,6 +237,43 @@ const BillToBillPayment = () => {
   const visibleSales = showFullyPaid
     ? calculatedStatus
     : calculatedStatus.filter((sale) => sale.status !== "FULL");
+
+  const getSalesSortValue = useMemo(
+    () => (sale: any, key: string) => {
+      switch (key) {
+        case "sales_no":
+          return sale.sales_no;
+        case "date":
+          return sale.date ? new Date(sale.date) : null;
+        case "credit_days":
+          return sale.credit_days ?? 0;
+        case "overdue_days":
+          return sale.status === "FULL" ? -1 : sale.overdue_days ?? 0;
+        case "total":
+          return sale.total ?? 0;
+        case "cleared_amount":
+          return sale.cleared_amount ?? 0;
+        case "new_cleared_amount":
+          return sale.new_cleared_amount ?? 0;
+        case "status":
+          return sale.status;
+        case "new_status":
+          return sale.new_status;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const {
+    sort: salesSort,
+    toggleSort: toggleSalesSort,
+    rows: sortedSales,
+  } = useTableControls({
+    data: visibleSales,
+    getSortValue: getSalesSortValue,
+  });
 
   const handleSettleBill = async (saleId: string) => {
     if (!selectedCustomerId || !reconciliationData) return;
@@ -501,21 +540,76 @@ const BillToBillPayment = () => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>No.</TableHead>
-                          <TableHead>Invoice No.</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead className="text-right">Credit Days</TableHead>
-                          <TableHead className="text-right">Overdue Days</TableHead>
-                          <TableHead className="text-right">Total Amount</TableHead>
-                          <TableHead className="text-right">Already Cleared</TableHead>
-                          <TableHead className="text-right">To Be Cleared</TableHead>
-                          <TableHead>Current Status</TableHead>
-                          <TableHead>New Status</TableHead>
+                          <SortableHeader
+                            label="Invoice No."
+                            sortKey="sales_no"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                          />
+                          <SortableHeader
+                            label="Date"
+                            sortKey="date"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                          />
+                          <SortableHeader
+                            label="Credit Days"
+                            sortKey="credit_days"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                            align="right"
+                            className="text-right"
+                          />
+                          <SortableHeader
+                            label="Overdue Days"
+                            sortKey="overdue_days"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                            align="right"
+                            className="text-right"
+                          />
+                          <SortableHeader
+                            label="Total Amount"
+                            sortKey="total"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                            align="right"
+                            className="text-right"
+                          />
+                          <SortableHeader
+                            label="Already Cleared"
+                            sortKey="cleared_amount"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                            align="right"
+                            className="text-right"
+                          />
+                          <SortableHeader
+                            label="To Be Cleared"
+                            sortKey="new_cleared_amount"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                            align="right"
+                            className="text-right"
+                          />
+                          <SortableHeader
+                            label="Current Status"
+                            sortKey="status"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                          />
+                          <SortableHeader
+                            label="New Status"
+                            sortKey="new_status"
+                            sort={salesSort}
+                            onSort={toggleSalesSort}
+                          />
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {visibleSales.length > 0 ? (
-                          visibleSales.map((sale, index) => (
+                        {sortedSales.length > 0 ? (
+                          sortedSales.map((sale, index) => (
                             <TableRow key={sale.id}>
                               <TableCell>{index + 1}</TableCell>
                               <TableCell>{sale.sales_no}</TableCell>

@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL =
+  window.electronAPI?.getApiUrl?.() ||
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:3000';
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
@@ -31,7 +34,13 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !isAuthRequest) {
       localStorage.removeItem('auth-token');
       localStorage.removeItem('user-data');
-      if (window.location.pathname !== '/login') {
+      const hashRouter =
+        window.location.protocol === 'file:' || Boolean(window.electronAPI);
+      if (hashRouter) {
+        if (!window.location.hash.startsWith('#/login')) {
+          window.location.hash = '#/login';
+        }
+      } else if (window.location.pathname !== '/login') {
         window.location.assign('/login');
       }
     }

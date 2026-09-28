@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { purchasesAPI, suppliersAPI } from "@/services/api";
 import { useToast } from "@/components/ui/use-toast";
@@ -6,7 +6,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -36,6 +35,11 @@ import {
 import { Check, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+
+const sortableHeadClass =
+  "text-white [&_button]:text-white [&_button]:hover:text-white";
 
 const formatAmount = (amount: number) => {
   return new Intl.NumberFormat('en-IN', {
@@ -50,7 +54,6 @@ const PurchaseReport = () => {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filteredPurchases, setFilteredPurchases] = useState<any[]>([]);
   const { toast } = useToast();
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -60,7 +63,6 @@ const PurchaseReport = () => {
 
   useEffect(() => {
     fetchSuppliers();
-    // Pre-load data for all suppliers
     fetchPurchases([]);
   }, []);
 
@@ -92,12 +94,11 @@ const PurchaseReport = () => {
         startDate,
         endDate
       });
-      // Transform the data to match the expected structure
       const transformedData = data.data.map((purchase: any) => ({
         ...purchase,
         supplier_name: purchase.supplier.name
       }));
-      setFilteredPurchases(transformedData);
+      setPurchases(transformedData);
     } catch (error) {
       console.error("Error fetching purchases:", error);
       toast({
@@ -110,9 +111,37 @@ const PurchaseReport = () => {
     }
   };
 
-  const filterPurchases = () => {
-    fetchPurchases(selectedSuppliers);
-  };
+  const getSortValue = useMemo(
+    () => (purchase: any, key: string) => {
+      switch (key) {
+        case "purchase_no":
+          return purchase.purchase_no;
+        case "supplier":
+          return purchase.supplier_name;
+        case "date":
+          return purchase.date ? new Date(purchase.date) : null;
+        case "total":
+          return purchase.total;
+        case "outstanding":
+          return purchase.payment_status === "FULL"
+            ? 0
+            : (purchase.remaining_amount ?? purchase.total);
+        case "credit_days":
+          return purchase.credit_days ?? 0;
+        case "overdue_days":
+          return purchase.overdue_days ?? 0;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const { sort, toggleSort, rows } = useTableControls({
+    data: purchases,
+    getSortValue,
+    defaultSort: { key: "date", direction: "desc" },
+  });
 
   const exportToCSV = () => {
     const headers = [
@@ -131,7 +160,7 @@ const PurchaseReport = () => {
     ];
     const csvContent = [
       headers.join(","),
-      ...filteredPurchases.map((purchase) => {
+      ...rows.map((purchase) => {
         return [
           `"${purchase.purchase_no || ''}"`,
           `"${purchase.supplier_name || ''}"`,
@@ -164,8 +193,8 @@ const PurchaseReport = () => {
     const selectedSupplierNames = selectedSuppliers.length > 0
       ? suppliers.filter(s => selectedSuppliers.includes(s.id)).map(s => s.name).join(", ")
       : "All Suppliers";
-    const totalAmount = filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0);
-    const totalOutstanding = filteredPurchases.reduce(
+    const totalAmount = rows.reduce((sum, purchase) => sum + purchase.total, 0);
+    const totalOutstanding = rows.reduce(
       (sum, purchase) =>
         sum + (purchase.payment_status === "FULL" ? 0 : (purchase.remaining_amount ?? purchase.total)),
       0
@@ -178,11 +207,11 @@ const PurchaseReport = () => {
       meta: [
         { label: "Suppliers", value: selectedSupplierNames },
         { label: "Period", value: formatPdfPeriod(startDate, endDate) },
-        { label: "Bills", value: String(filteredPurchases.length) },
+        { label: "Bills", value: String(rows.length) },
       ],
       summary: [
         { label: "Total Purchases", value: formatPdfAmount(totalAmount) },
-        { label: "Number of Purchases", value: String(filteredPurchases.length) },
+        { label: "Number of Purchases", value: String(rows.length) },
         { label: "Outstanding", value: formatPdfAmount(totalOutstanding), emphasize: true },
       ],
       columns: [
@@ -194,7 +223,7 @@ const PurchaseReport = () => {
         { header: "Overdue", width: 22, align: "center" },
         { header: "Credit Days", width: 24, align: "center" },
       ],
-      rows: filteredPurchases.map((purchase) => [
+      rows: rows.map((purchase) => [
         purchase.purchase_no || "—",
         purchase.supplier_name || "—",
         formatPdfDate(purchase.date),
@@ -341,24 +370,24 @@ const PurchaseReport = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {filteredPurchases.length > 0 && (
+            {rows.length > 0 && (
               <div className="sticky top-0 z-10 bg-background pb-4">
                 <div className="bg-sidebar/5 rounded-lg p-4 shadow-sm">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Total Purchases</span>
                     <span className="font-medium">
-                      {formatAmount(filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0))}
+                      {formatAmount(rows.reduce((sum, purchase) => sum + purchase.total, 0))}
                     </span>
                   </div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Number of Purchases</span>
-                    <span className="font-medium">{filteredPurchases.length}</span>
+                    <span className="font-medium">{rows.length}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Outstanding</span>
                     <span className="font-medium text-red-600">
                       {formatAmount(
-                        filteredPurchases.reduce(
+                        rows.reduce(
                           (sum, purchase) =>
                             sum + (purchase.payment_status === "FULL" ? 0 : (purchase.remaining_amount ?? purchase.total)),
                           0
@@ -374,19 +403,65 @@ const PurchaseReport = () => {
               <Table>
                 <TableHeader className="bg-sidebar">
                   <TableRow>
-                    <TableHead className="text-white rounded-tl-lg">Purchase No</TableHead>
-                    <TableHead className="text-white">Supplier</TableHead>
-                    <TableHead className="text-white">Date</TableHead>
-                    <TableHead className="text-white">Total</TableHead>
-                    <TableHead className="text-white">Outstanding</TableHead>
-                    <TableHead className="text-white">Credit Days</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Overdue Days</TableHead>
+                    <SortableHeader
+                      label="Purchase No"
+                      sortKey="purchase_no"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={`rounded-tl-lg ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Supplier"
+                      sortKey="supplier"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Date"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Total"
+                      sortKey="total"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Outstanding"
+                      sortKey="outstanding"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Credit Days"
+                      sortKey="credit_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Overdue Days"
+                      sortKey="overdue_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`rounded-tr-lg text-right ${sortableHeadClass}`}
+                    />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPurchases.length > 0 ? (
+                  {rows.length > 0 ? (
                     <>
-                      {filteredPurchases.map((purchase) => (
+                      {rows.map((purchase) => (
                         <TableRow key={purchase.id} className="hover:bg-sidebar/10">
                           <TableCell className="font-medium">{purchase.purchase_no}</TableCell>
                           <TableCell>{purchase.supplier_name}</TableCell>
@@ -414,11 +489,11 @@ const PurchaseReport = () => {
                       <TableRow className="border-t-2 border-sidebar/20">
                         <TableCell colSpan={3} className="text-right font-medium">Total</TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatAmount(filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0))}
+                          {formatAmount(rows.reduce((sum, purchase) => sum + purchase.total, 0))}
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatAmount(
-                            filteredPurchases.reduce(
+                            rows.reduce(
                               (sum, purchase) =>
                                 sum + (purchase.payment_status === "FULL" ? 0 : (purchase.remaining_amount ?? purchase.total)),
                               0

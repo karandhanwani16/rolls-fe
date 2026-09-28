@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { customersAPI, paymentsInAPI } from "@/services/api";
 import { getWatavVendors } from "@/lib/partyTypes";
@@ -53,6 +53,11 @@ import {
   settlementClassName,
   settlementLabel,
 } from "@/lib/watavSettlement";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+
+const sortableHeadClass =
+  "text-white [&_button]:text-white [&_button]:hover:text-white";
 
 const formatAmount = (amount: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -169,6 +174,72 @@ const WatavReport = () => {
       customer.city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const getTxnSortValue = useMemo(
+    () => (item: any, key: string) => {
+      switch (key) {
+        case "date":
+          return item.date ? new Date(item.date) : null;
+        case "vendor":
+          return item.watavCustomerName || "";
+        case "customer":
+          return item.actualCustomerName || "";
+        case "entry":
+          return item.entryType || "";
+        case "status":
+          return item.collectionStatus || "";
+        case "original":
+          return item.originalAmount ?? item.receivedAmount ?? 0;
+        case "settled":
+          return item.totalSettledAmount ?? 0;
+        case "remaining":
+          return item.remainingAmount ?? 0;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const {
+    sort: txnSort,
+    toggleSort: toggleTxnSort,
+    rows: txnRows,
+  } = useTableControls({
+    data: transactions,
+    getSortValue: getTxnSortValue,
+    defaultSort: { key: "date", direction: "desc" },
+  });
+
+  const getReceiptSortValue = useMemo(
+    () => (receipt: any, key: string) => {
+      switch (key) {
+        case "date":
+          return receipt.receipt_date ? new Date(receipt.receipt_date) : null;
+        case "vendor":
+          return receipt.vendor?.name || "";
+        case "received":
+          return receipt.amount ?? 0;
+        case "allocated":
+          return receipt.allocatedAmount ?? (receipt.amount - (receipt.unallocated_amount || 0));
+        case "unallocated":
+          return receipt.unallocatedAmount ?? (receipt.unallocated_amount || 0);
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const {
+    sort: receiptSort,
+    toggleSort: toggleReceiptSort,
+    rows: receiptRows,
+  } = useTableControls({
+    data: receipts,
+    getSortValue: getReceiptSortValue,
+    defaultSort: { key: "date", direction: "desc" },
+  });
+
   const exportToCSV = () => {
     const headers = [
       "Sr. No.",
@@ -185,7 +256,7 @@ const WatavReport = () => {
     ];
     const csvContent = [
       headers.join(","),
-      ...transactions.map((item) =>
+      ...txnRows.map((item) =>
         [
           item.srno,
           format(new Date(item.date), "yyyy-MM-dd"),
@@ -224,7 +295,7 @@ const WatavReport = () => {
       meta: [
         { label: "Vendor", value: selectedWatavName },
         { label: "Period", value: formatPdfPeriod(startDate, endDate) },
-        { label: "Entries", value: String(transactions.length) },
+        { label: "Entries", value: String(txnRows.length) },
       ],
       summary: [
         { label: "Receivable", value: formatPdfAmount(summary.totalReceivable || summary.totalReceived) },
@@ -243,7 +314,7 @@ const WatavReport = () => {
         { header: "Settled", width: 28, align: "right" },
         { header: "Remaining", width: 30, align: "right" },
       ],
-      rows: transactions.map((item) => [
+      rows: txnRows.map((item) => [
         item.srno,
         formatPdfDate(item.date),
         item.watavCustomerName || "—",
@@ -481,16 +552,16 @@ const WatavReport = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Vendor</TableHead>
+                      <SortableHeader label="Date" sortKey="date" sort={receiptSort} onSort={toggleReceiptSort} />
+                      <SortableHeader label="Vendor" sortKey="vendor" sort={receiptSort} onSort={toggleReceiptSort} />
                       <TableHead>Reference</TableHead>
-                      <TableHead className="text-right">Received</TableHead>
-                      <TableHead className="text-right">Allocated</TableHead>
-                      <TableHead className="text-right">Unallocated</TableHead>
+                      <SortableHeader label="Received" sortKey="received" sort={receiptSort} onSort={toggleReceiptSort} align="right" className="text-right" />
+                      <SortableHeader label="Allocated" sortKey="allocated" sort={receiptSort} onSort={toggleReceiptSort} align="right" className="text-right" />
+                      <SortableHeader label="Unallocated" sortKey="unallocated" sort={receiptSort} onSort={toggleReceiptSort} align="right" className="text-right" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {receipts.map((receipt) => (
+                    {receiptRows.map((receipt) => (
                       <TableRow key={receipt.id}>
                         <TableCell>
                           {format(new Date(receipt.receipt_date), "yyyy-MM-dd")}
@@ -516,20 +587,20 @@ const WatavReport = () => {
                 <TableHeader className="bg-sidebar">
                   <TableRow>
                     <TableHead className="text-white">Sr.</TableHead>
-                    <TableHead className="text-white">Date</TableHead>
-                    <TableHead className="text-white">Vendor</TableHead>
-                    <TableHead className="text-white">Customer</TableHead>
-                    <TableHead className="text-white">Entry</TableHead>
-                    <TableHead className="text-white">Status</TableHead>
-                    <TableHead className="text-white text-right">Original</TableHead>
-                    <TableHead className="text-white text-right">Settled</TableHead>
-                    <TableHead className="text-white text-right">Remaining</TableHead>
+                    <SortableHeader label="Date" sortKey="date" sort={txnSort} onSort={toggleTxnSort} className={sortableHeadClass} />
+                    <SortableHeader label="Vendor" sortKey="vendor" sort={txnSort} onSort={toggleTxnSort} className={sortableHeadClass} />
+                    <SortableHeader label="Customer" sortKey="customer" sort={txnSort} onSort={toggleTxnSort} className={sortableHeadClass} />
+                    <SortableHeader label="Entry" sortKey="entry" sort={txnSort} onSort={toggleTxnSort} className={sortableHeadClass} />
+                    <SortableHeader label="Status" sortKey="status" sort={txnSort} onSort={toggleTxnSort} className={sortableHeadClass} />
+                    <SortableHeader label="Original" sortKey="original" sort={txnSort} onSort={toggleTxnSort} align="right" className={`text-right ${sortableHeadClass}`} />
+                    <SortableHeader label="Settled" sortKey="settled" sort={txnSort} onSort={toggleTxnSort} align="right" className={`text-right ${sortableHeadClass}`} />
+                    <SortableHeader label="Remaining" sortKey="remaining" sort={txnSort} onSort={toggleTxnSort} align="right" className={`text-right ${sortableHeadClass}`} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.length > 0 ? (
+                  {txnRows.length > 0 ? (
                     <>
-                      {transactions.map((item) => (
+                      {txnRows.map((item) => (
                           <TableRow key={item.id} className="hover:bg-sidebar/10">
                             <TableCell>{item.srno}</TableCell>
                             <TableCell>{format(new Date(item.date), "yyyy-MM-dd")}</TableCell>

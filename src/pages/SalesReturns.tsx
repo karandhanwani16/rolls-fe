@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Plus, Search, Edit, Trash2, ArrowUpDown, Undo2 } from "lucide-react";
+import { Plus, Edit, Trash2, Undo2 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -16,10 +15,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/components/ui/use-toast";
 import { salesReturnsAPI } from "@/services/api";
+import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 
 const SalesReturns = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -30,13 +31,63 @@ const SalesReturns = () => {
     },
   });
 
-  const filtered = data?.filter((item: any) => {
-    const q = searchTerm.toLowerCase();
-    return (
-      item.customer_name?.toLowerCase().includes(q) ||
-      item.return_no?.toLowerCase().includes(q) ||
-      item.description?.toLowerCase().includes(q)
-    );
+  const searchFns = useMemo(
+    () => [
+      (item: any) => item.return_no,
+      (item: any) => item.customer_name,
+      (item: any) => item.description,
+    ],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (item: any, key: string) => {
+      switch (key) {
+        case "return_no":
+          return item.return_no;
+        case "customer_name":
+          return item.customer_name;
+        case "date":
+          return item.date ? new Date(item.date) : null;
+        case "total":
+          return item.total;
+        case "rolls":
+          return item.items?.length ?? 0;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "customer_name",
+        label: "Customer",
+        options: uniqueOptions((data || []).map((item: any) => item.customer_name)),
+        predicate: (item: any, value: string) => item.customer_name === value,
+      },
+    ],
+    [data]
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "date", direction: "desc" },
   });
 
   const handleDelete = async () => {
@@ -77,38 +128,61 @@ const SalesReturns = () => {
 
         <Card>
           <CardHeader>
-            <div className="flex flex-col md:flex-row justify-between md:items-center">
-              <div>
-                <CardTitle>Sales Return Records</CardTitle>
-                <CardDescription>
-                  {isLoading ? "Loading..." : `${filtered?.length || 0} returns found`}
-                </CardDescription>
-              </div>
-              <div className="mt-4 md:mt-0 relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search returns..."
-                  className="pl-8 w-full md:w-[250px]"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+            <div>
+              <CardTitle>Sales Return Records</CardTitle>
+              <CardDescription>
+                {isLoading ? "Loading..." : `${rows.length} returns found`}
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent>
+            <TableToolbar
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              searchPlaceholder="Search returns..."
+              filters={filterDefs}
+              onFilterChange={setFilter}
+              onClear={clearFilters}
+              hasActiveFilters={hasActiveFilters}
+            />
             <div className="rounded-md border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>
-                      <div className="flex items-center">
-                        Return # <ArrowUpDown className="ml-1 h-3 w-3" />
-                      </div>
-                    </TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <SortableHeader
+                      label="Return #"
+                      sortKey="return_no"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Customer"
+                      sortKey="customer_name"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Date"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Rolls"
+                      sortKey="rolls"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
+                    <SortableHeader
+                      label="Amount"
+                      sortKey="total"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -116,20 +190,21 @@ const SalesReturns = () => {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6">Loading...</TableCell>
+                      <TableCell colSpan={7} className="text-center py-6">Loading...</TableCell>
                     </TableRow>
-                  ) : filtered?.length === 0 ? (
+                  ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6">
+                      <TableCell colSpan={7} className="text-center py-6">
                         No sales returns found.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filtered?.map((item: any) => (
+                    rows.map((item: any) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">{item.return_no}</TableCell>
                         <TableCell>{item.customer_name}</TableCell>
                         <TableCell>{format(new Date(item.date), "dd MMM yyyy")}</TableCell>
+                        <TableCell className="text-right">{item.items?.length ?? 0}</TableCell>
                         <TableCell className="text-right">₹{item.total.toLocaleString("en-IN")}</TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate">{item.description || "-"}</TableCell>
                         <TableCell className="text-right">

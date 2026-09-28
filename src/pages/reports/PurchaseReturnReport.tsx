@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { purchaseReturnsAPI, suppliersAPI } from "@/services/api";
 import { useToast } from "@/components/ui/use-toast";
@@ -15,6 +15,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+
+const sortableHeadClass =
+  "text-white [&_button]:text-white [&_button]:hover:text-white";
 
 const formatAmount = (amount: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(amount);
@@ -23,7 +28,6 @@ const PurchaseReturnReport = () => {
   const [returns, setReturns] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtered, setFiltered] = useState<any[]>([]);
   const { toast } = useToast();
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -38,17 +42,11 @@ const PurchaseReturnReport = () => {
     fetchReturns();
   }, []);
 
-  useEffect(() => {
-    filterRows();
-  }, [returns, selectedSuppliers, startDate, endDate]);
-
   const fetchReturns = async () => {
     try {
       setLoading(true);
       const response = await purchaseReturnsAPI.getAll();
-      const data = response.data || [];
-      setReturns(data);
-      setFiltered(data);
+      setReturns(response.data || []);
     } catch {
       toast({ title: "Error", description: "Failed to fetch purchase returns", variant: "destructive" });
     } finally {
@@ -56,21 +54,45 @@ const PurchaseReturnReport = () => {
     }
   };
 
-  const filterRows = () => {
-    setFiltered(
+  const filtered = useMemo(
+    () =>
       returns.filter((row) => {
         const d = new Date(row.date);
         const inRange = d >= new Date(startDate) && d <= new Date(endDate + "T23:59:59");
         const matchSupplier = selectedSuppliers.length === 0 || selectedSuppliers.includes(row.supplier_id);
         return inRange && matchSupplier;
-      })
-    );
-  };
+      }),
+    [returns, selectedSuppliers, startDate, endDate]
+  );
+
+  const getSortValue = useMemo(
+    () => (row: any, key: string) => {
+      switch (key) {
+        case "return_no":
+          return row.return_no;
+        case "party":
+          return row.supplier_name;
+        case "date":
+          return row.date ? new Date(row.date) : null;
+        case "total":
+          return row.total;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const { sort, toggleSort, rows } = useTableControls({
+    data: filtered,
+    getSortValue,
+    defaultSort: { key: "date", direction: "desc" },
+  });
 
   const exportToCSV = () => {
     const csv = [
       ["Return No", "Supplier", "Date", "Total", "Description"].join(","),
-      ...filtered.map((row) =>
+      ...rows.map((row) =>
         [`"${row.return_no}"`, `"${row.supplier_name}"`, format(new Date(row.date), "yyyy-MM-dd"), row.total, `"${row.description || ""}"`].join(",")
       ),
     ].join("\n");
@@ -83,7 +105,7 @@ const PurchaseReturnReport = () => {
   };
 
   const filteredSuppliers = suppliers.filter((s) => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const total = filtered.reduce((sum, row) => sum + (row.total || 0), 0);
+  const total = rows.reduce((sum, row) => sum + (row.total || 0), 0);
 
   const exportToPDF = () => {
     const selectedSupplierNames = selectedSuppliers.length > 0
@@ -96,11 +118,11 @@ const PurchaseReturnReport = () => {
       meta: [
         { label: "Suppliers", value: selectedSupplierNames },
         { label: "Period", value: formatPdfPeriod(startDate, endDate) },
-        { label: "Returns", value: String(filtered.length) },
+        { label: "Returns", value: String(rows.length) },
       ],
       summary: [
         { label: "Total Returns", value: formatPdfAmount(total), emphasize: true },
-        { label: "Number of Returns", value: String(filtered.length) },
+        { label: "Number of Returns", value: String(rows.length) },
       ],
       columns: [
         { header: "Return No", width: 32, align: "center" },
@@ -108,7 +130,7 @@ const PurchaseReturnReport = () => {
         { header: "Date", width: 28, align: "center" },
         { header: "Total", width: 36, align: "right" },
       ],
-      rows: filtered.map((row) => [
+      rows: rows.map((row) => [
         row.return_no || "—",
         row.supplier_name || "—",
         formatPdfDate(row.date),
@@ -190,17 +212,17 @@ const PurchaseReturnReport = () => {
               <Table>
                 <TableHeader className="bg-sidebar">
                   <TableRow>
-                    <TableHead className="text-white">Return No</TableHead>
-                    <TableHead className="text-white">Supplier</TableHead>
-                    <TableHead className="text-white">Date</TableHead>
-                    <TableHead className="text-white">Total</TableHead>
+                    <SortableHeader label="Return No" sortKey="return_no" sort={sort} onSort={toggleSort} className={sortableHeadClass} />
+                    <SortableHeader label="Supplier" sortKey="party" sort={sort} onSort={toggleSort} className={sortableHeadClass} />
+                    <SortableHeader label="Date" sortKey="date" sort={sort} onSort={toggleSort} className={sortableHeadClass} />
+                    <SortableHeader label="Total" sortKey="total" sort={sort} onSort={toggleSort} className={sortableHeadClass} />
                     <TableHead className="text-white">Description</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.length > 0 ? (
+                  {rows.length > 0 ? (
                     <>
-                      {filtered.map((row) => (
+                      {rows.map((row) => (
                         <TableRow key={row.id}>
                           <TableCell className="font-medium">{row.return_no}</TableCell>
                           <TableCell>{row.supplier_name}</TableCell>

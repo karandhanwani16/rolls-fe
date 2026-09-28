@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { Users, Plus, Search, Mail, Phone, FileText, Edit, Trash, MapPin, Loader2 } from "lucide-react";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
+import { Users, Plus, Mail, Phone, FileText, Edit, Trash, MapPin, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,6 +39,7 @@ import * as z from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { customersAPI } from "@/services/api";
 import { getRegularCustomers } from "@/lib/partyTypes";
+import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
 
 type Customer = {
   id: string;
@@ -76,7 +79,6 @@ const customerFormSchema = z.object({
 type CustomerFormValues = z.infer<typeof customerFormSchema>;
 
 const Customers = () => {
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -173,14 +175,65 @@ const Customers = () => {
     }
   }, [error, toast]);
 
-  const filteredCustomers = customers?.filter(customer => {
-    return (
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (customer.phone && customer.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (customer.city && customer.city.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }
-  ) || [];
+  const searchFns = useMemo(
+    () => [
+      (item: Customer) => item.name,
+      (item: Customer) => item.phone,
+      (item: Customer) => item.city,
+      (item: Customer) => item.description,
+    ],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (item: Customer, key: string) => {
+      switch (key) {
+        case "name":
+          return item.name;
+        case "phone":
+          return item.phone;
+        case "city":
+          return item.city;
+        case "opening_balance":
+          return item.opening_balance;
+        case "credit_days":
+          return item.credit_days;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "city",
+        label: "City",
+        options: uniqueOptions(customers?.map((i) => i.city) || []),
+        predicate: (item: Customer, value: string) => item.city === value,
+      },
+    ],
+    [customers]
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: customers,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "name", direction: "asc" },
+  });
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -318,25 +371,25 @@ const Customers = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search customers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search customers..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead>Opening Balance</TableHead>
-                  <TableHead>Credit Days</TableHead>
+                  <SortableHeader label="Name" sortKey="name" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Phone" sortKey="phone" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="City" sortKey="city" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Opening Balance" sortKey="opening_balance" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Credit Days" sortKey="credit_days" sort={sort} onSort={toggleSort} />
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -348,8 +401,8 @@ const Customers = () => {
                       Loading customers...
                     </TableCell>
                   </TableRow>
-                ) : filteredCustomers.length > 0 ? (
-                  filteredCustomers.map((customer) => (
+                ) : rows.length > 0 ? (
+                  rows.map((customer) => (
                     <TableRow key={customer.id}>
                       <TableCell className="font-medium">{customer.name}</TableCell>
                       <TableCell>

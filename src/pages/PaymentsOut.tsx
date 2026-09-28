@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { CreditCard, Plus, Search, Edit, Trash2, Calendar } from "lucide-react";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
+import { CreditCard, Plus, Edit, Trash2 } from "lucide-react";
 import { paymentsOutAPI, suppliersAPI } from "@/services/api";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -51,6 +53,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon } from "lucide-react";
+import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
 
 // Form schema
 const paymentOutSchema = z.object({
@@ -76,7 +79,6 @@ const paymentTypes = [
 ];
 
 const PaymentsOut = () => {
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentPaymentOut, setCurrentPaymentOut] = useState<any>(null);
@@ -191,11 +193,71 @@ const PaymentsOut = () => {
   const addFormType = addForm.watch("type");
   const editFormType = editForm.watch("type");
 
-  // Filter payments
-  const filteredPayments = paymentsOutData?.filter((payment: any) => {
-    return payment.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.supplier?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+  const searchFns = useMemo(
+    () => [
+      (p: any) => p.description,
+      (p: any) => p.type,
+      (p: any) => p.supplier?.name,
+    ],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (p: any, key: string) => {
+      switch (key) {
+        case "supplier":
+          return p.supplier?.name;
+        case "amount":
+          return p.amount ?? 0;
+        case "type":
+          return p.type;
+        case "payment_date":
+          return p.payment_date ? new Date(p.payment_date) : null;
+        case "cheque_date":
+          return p.cheque_date ? new Date(p.cheque_date) : null;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "type",
+        label: "Payment Type",
+        options: paymentTypes,
+        predicate: (p: any, value: string) => p.type === value,
+      },
+      {
+        key: "supplier",
+        label: "Supplier",
+        options: uniqueOptions(
+          (paymentsOutData || []).map((p: any) => p.supplier?.name)
+        ),
+        predicate: (p: any, value: string) => p.supplier?.name === value,
+      },
+    ],
+    [paymentsOutData]
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: paymentsOutData,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "payment_date", direction: "desc" },
   });
 
   // Handle edit button click
@@ -237,27 +299,25 @@ const PaymentsOut = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search payments..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search payments..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Payment Type</TableHead>
-                  <TableHead>Payment Date</TableHead>
-                  <TableHead>Cheque Date</TableHead>
+                  <SortableHeader label="Supplier" sortKey="supplier" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Amount" sortKey="amount" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Payment Type" sortKey="type" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Payment Date" sortKey="payment_date" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Cheque Date" sortKey="cheque_date" sort={sort} onSort={toggleSort} />
                   <TableHead>Description</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -265,12 +325,12 @@ const PaymentsOut = () => {
               <TableBody>
                 {isLoadingPaymentsOut ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
-                ) : filteredPayments?.length > 0 ? (
-                  filteredPayments.map((payment: any) => (
+                ) : rows.length > 0 ? (
+                  rows.map((payment: any) => (
                     <TableRow key={payment.id}>
                       <TableCell>{payment.supplier?.name || "N/A"}</TableCell>
                       <TableCell>{formatCurrency(payment.amount)}</TableCell>
@@ -312,7 +372,7 @@ const PaymentsOut = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       No payments found.
                     </TableCell>
                   </TableRow>

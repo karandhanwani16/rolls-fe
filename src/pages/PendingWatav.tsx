@@ -15,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { useTableControls } from "@/hooks/useTableControls";
 import { format } from "date-fns";
 import {
   Loader2,
@@ -197,6 +199,106 @@ const PendingWatav = () => {
       );
     });
   }, [transactions, selectedCustomer, searchTerm]);
+
+  const getEntriesSortValue = useMemo(
+    () => (item: any, key: string) => {
+      switch (key) {
+        case "date":
+          return item.date ? new Date(item.date) : null;
+        case "vendor":
+          return item.watavCustomerName;
+        case "customer":
+          return item.actualCustomerName;
+        case "entryType":
+          return item.entryType === "STANDALONE" ? "Standalone" : "Customer";
+        case "status":
+          return settlementLabel(item.collectionStatus);
+        case "original":
+          return item.originalAmount ?? item.receivedAmount ?? 0;
+        case "settled":
+          return item.totalSettledAmount || 0;
+        case "remaining":
+          return item.remainingAmount ?? item.receivedAmount ?? 0;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const getVendorSortValue = useMemo(
+    () => (row: any, key: string) => {
+      switch (key) {
+        case "vendor":
+          return row.watavCustomerName;
+        case "entries":
+          return row.pendingEntries ?? 0;
+        case "receivable":
+          return row.totalReceivable ?? row.pendingGross ?? 0;
+        case "settled":
+          return row.totalSettled || 0;
+        case "pending":
+          return row.currentPending ?? row.pendingNet ?? 0;
+        case "unallocated":
+          return row.unallocatedAmount || 0;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const getReceiptSortValue = useMemo(
+    () => (receipt: any, key: string) => {
+      switch (key) {
+        case "date":
+          return receipt.receipt_date ? new Date(receipt.receipt_date) : null;
+        case "vendor":
+          return receipt.vendor?.name;
+        case "reference":
+          return receipt.reference || receipt.type;
+        case "received":
+          return receipt.amount ?? 0;
+        case "allocated":
+          return (
+            receipt.allocatedAmount ??
+            (receipt.amount - (receipt.unallocated_amount || 0))
+          );
+        case "unallocated":
+          return receipt.unallocatedAmount ?? (receipt.unallocated_amount || 0);
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const {
+    sort: entriesSort,
+    toggleSort: toggleEntriesSort,
+    rows: sortedEntries,
+  } = useTableControls({
+    data: filteredTransactions,
+    getSortValue: getEntriesSortValue,
+  });
+
+  const {
+    sort: vendorSort,
+    toggleSort: toggleVendorSort,
+    rows: sortedVendors,
+  } = useTableControls({
+    data: byWatav,
+    getSortValue: getVendorSortValue,
+  });
+
+  const {
+    sort: receiptsSort,
+    toggleSort: toggleReceiptsSort,
+    rows: sortedReceipts,
+  } = useTableControls({
+    data: receipts,
+    getSortValue: getReceiptSortValue,
+  });
 
   const filteredSummary = useMemo(() => {
     const rows = filteredTransactions;
@@ -606,16 +708,56 @@ const PendingWatav = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead className="text-right">Entries</TableHead>
-                  <TableHead className="text-right">Receivable</TableHead>
-                  <TableHead className="text-right">Settled</TableHead>
-                  <TableHead className="text-right">Pending</TableHead>
-                  <TableHead className="text-right">Unallocated</TableHead>
+                  <SortableHeader
+                    label="Vendor"
+                    sortKey="vendor"
+                    sort={vendorSort}
+                    onSort={toggleVendorSort}
+                  />
+                  <SortableHeader
+                    label="Entries"
+                    sortKey="entries"
+                    sort={vendorSort}
+                    onSort={toggleVendorSort}
+                    align="right"
+                    className="text-right"
+                  />
+                  <SortableHeader
+                    label="Receivable"
+                    sortKey="receivable"
+                    sort={vendorSort}
+                    onSort={toggleVendorSort}
+                    align="right"
+                    className="text-right"
+                  />
+                  <SortableHeader
+                    label="Settled"
+                    sortKey="settled"
+                    sort={vendorSort}
+                    onSort={toggleVendorSort}
+                    align="right"
+                    className="text-right"
+                  />
+                  <SortableHeader
+                    label="Pending"
+                    sortKey="pending"
+                    sort={vendorSort}
+                    onSort={toggleVendorSort}
+                    align="right"
+                    className="text-right"
+                  />
+                  <SortableHeader
+                    label="Unallocated"
+                    sortKey="unallocated"
+                    sort={vendorSort}
+                    onSort={toggleVendorSort}
+                    align="right"
+                    className="text-right"
+                  />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {byWatav.map((row) => (
+                {sortedVendors.map((row) => (
                   <TableRow
                     key={row.watavCustomerId}
                     className="cursor-pointer hover:bg-muted/50"
@@ -654,20 +796,66 @@ const PendingWatav = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Entry</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Original</TableHead>
-                  <TableHead className="text-right">Settled</TableHead>
-                  <TableHead className="text-right">Remaining</TableHead>
+                  <SortableHeader
+                    label="Date"
+                    sortKey="date"
+                    sort={entriesSort}
+                    onSort={toggleEntriesSort}
+                  />
+                  <SortableHeader
+                    label="Vendor"
+                    sortKey="vendor"
+                    sort={entriesSort}
+                    onSort={toggleEntriesSort}
+                  />
+                  <SortableHeader
+                    label="Customer"
+                    sortKey="customer"
+                    sort={entriesSort}
+                    onSort={toggleEntriesSort}
+                  />
+                  <SortableHeader
+                    label="Entry"
+                    sortKey="entryType"
+                    sort={entriesSort}
+                    onSort={toggleEntriesSort}
+                  />
+                  <SortableHeader
+                    label="Status"
+                    sortKey="status"
+                    sort={entriesSort}
+                    onSort={toggleEntriesSort}
+                  />
+                  <SortableHeader
+                    label="Original"
+                    sortKey="original"
+                    sort={entriesSort}
+                    onSort={toggleEntriesSort}
+                    align="right"
+                    className="text-right"
+                  />
+                  <SortableHeader
+                    label="Settled"
+                    sortKey="settled"
+                    sort={entriesSort}
+                    onSort={toggleEntriesSort}
+                    align="right"
+                    className="text-right"
+                  />
+                  <SortableHeader
+                    label="Remaining"
+                    sortKey="remaining"
+                    sort={entriesSort}
+                    onSort={toggleEntriesSort}
+                    align="right"
+                    className="text-right"
+                  />
                   <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTransactions.length > 0 ? (
-                  filteredTransactions.map((item) => (
+                {sortedEntries.length > 0 ? (
+                  sortedEntries.map((item) => (
                     <TableRow
                       key={item.id}
                       className="cursor-pointer hover:bg-muted/40"
@@ -724,16 +912,52 @@ const PendingWatav = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead className="text-right">Received</TableHead>
-                  <TableHead className="text-right">Allocated</TableHead>
-                  <TableHead className="text-right">Unallocated</TableHead>
+                  <SortableHeader
+                    label="Date"
+                    sortKey="date"
+                    sort={receiptsSort}
+                    onSort={toggleReceiptsSort}
+                  />
+                  <SortableHeader
+                    label="Vendor"
+                    sortKey="vendor"
+                    sort={receiptsSort}
+                    onSort={toggleReceiptsSort}
+                  />
+                  <SortableHeader
+                    label="Reference"
+                    sortKey="reference"
+                    sort={receiptsSort}
+                    onSort={toggleReceiptsSort}
+                  />
+                  <SortableHeader
+                    label="Received"
+                    sortKey="received"
+                    sort={receiptsSort}
+                    onSort={toggleReceiptsSort}
+                    align="right"
+                    className="text-right"
+                  />
+                  <SortableHeader
+                    label="Allocated"
+                    sortKey="allocated"
+                    sort={receiptsSort}
+                    onSort={toggleReceiptsSort}
+                    align="right"
+                    className="text-right"
+                  />
+                  <SortableHeader
+                    label="Unallocated"
+                    sortKey="unallocated"
+                    sort={receiptsSort}
+                    onSort={toggleReceiptsSort}
+                    align="right"
+                    className="text-right"
+                  />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {receipts.map((receipt) => (
+                {sortedReceipts.map((receipt) => (
                   <TableRow
                     key={receipt.id}
                     className="cursor-pointer"

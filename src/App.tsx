@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -74,10 +74,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// App structure with AuthProvider wrapping BrowserRouter
-const AppContent = () => {
+function useFileProtocolRouter() {
   return (
-    <BrowserRouter>
+    typeof window !== "undefined" &&
+    (window.location.protocol === "file:" || Boolean(window.electronAPI))
+  );
+}
+
+const AppRoutes = () => (
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -282,7 +286,14 @@ const AppContent = () => {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </AuthProvider>
-    </BrowserRouter>
+);
+
+const AppContent = () => {
+  const Router = useFileProtocolRouter() ? HashRouter : BrowserRouter;
+  return (
+    <Router>
+      <AppRoutes />
+    </Router>
   );
 };
 

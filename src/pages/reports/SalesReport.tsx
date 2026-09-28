@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { salesAPI, customersAPI } from "@/services/api";
 import { getRegularCustomers } from "@/lib/partyTypes";
@@ -7,7 +7,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -37,6 +36,11 @@ import {
 import { Check, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+
+const sortableHeadClass =
+  "text-white [&_button]:text-white [&_button]:hover:text-white";
 
 const formatAmount = (amount: number) => {
   return new Intl.NumberFormat('en-IN', {
@@ -51,7 +55,6 @@ const SalesReport = () => {
   const [sales, setSales] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filteredSales, setFilteredSales] = useState<any[]>([]);
   const { toast } = useToast();
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -63,12 +66,6 @@ const SalesReport = () => {
     fetchCustomers();
     fetchSales();
   }, []);
-
-  useEffect(() => {
-    if (selectedCustomers.length > 0) {
-      filterSales();
-    }
-  }, [selectedCustomers, startDate, endDate]);
 
   const fetchCustomers = async () => {
     try {
@@ -88,9 +85,7 @@ const SalesReport = () => {
     try {
       setLoading(true);
       const response = await salesAPI.getAll();
-      const salesData = response.data || [];
-      setSales(salesData);
-      setFilteredSales(salesData);
+      setSales(response.data || []);
     } catch (error) {
       console.error("Error fetching sales:", error);
       toast({
@@ -103,15 +98,47 @@ const SalesReport = () => {
     }
   };
 
-  const filterSales = () => {
-    const filtered = sales.filter((sale) => {
+  const filteredSales = useMemo(() => {
+    if (selectedCustomers.length === 0) return sales;
+    return sales.filter((sale) => {
       const saleDate = new Date(sale.date);
       const isInDateRange = saleDate >= new Date(startDate) && saleDate <= new Date(endDate);
-      const isSelectedCustomer = selectedCustomers.length === 0 || selectedCustomers.includes(sale.customer_id);
+      const isSelectedCustomer = selectedCustomers.includes(sale.customer_id);
       return isInDateRange && isSelectedCustomer;
     });
-    setFilteredSales(filtered);
-  };
+  }, [sales, selectedCustomers, startDate, endDate]);
+
+  const getSortValue = useMemo(
+    () => (sale: any, key: string) => {
+      switch (key) {
+        case "sales_no":
+          return sale.sales_no;
+        case "customer":
+          return sale.customer_name;
+        case "date":
+          return sale.date ? new Date(sale.date) : null;
+        case "total":
+          return sale.total;
+        case "outstanding":
+          return sale.payment_status === "FULL"
+            ? 0
+            : (sale.remaining_amount ?? sale.total);
+        case "credit_days":
+          return sale.credit_days ?? 0;
+        case "overdue_days":
+          return sale.overdue_days ?? 0;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const { sort, toggleSort, rows } = useTableControls({
+    data: filteredSales,
+    getSortValue,
+    defaultSort: { key: "date", direction: "desc" },
+  });
 
   const exportToCSV = () => {
     const headers = [
@@ -128,7 +155,7 @@ const SalesReport = () => {
     ];
     const csvContent = [
       headers.join(","),
-      ...filteredSales.map((sale) => {
+      ...rows.map((sale) => {
         return [
           `"${sale.sales_no || ''}"`,
           `"${sale.customer_name || ''}"`,
@@ -159,8 +186,8 @@ const SalesReport = () => {
     const selectedCustomerNames = selectedCustomers.length > 0
       ? customers.filter(c => selectedCustomers.includes(c.id)).map(c => c.name).join(", ")
       : "All Customers";
-    const totalAmount = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalOutstanding = filteredSales.reduce((sum, sale) => sum + (sale.remaining_amount ?? sale.total), 0);
+    const totalAmount = rows.reduce((sum, sale) => sum + sale.total, 0);
+    const totalOutstanding = rows.reduce((sum, sale) => sum + (sale.remaining_amount ?? sale.total), 0);
 
     downloadReportPdf({
       title: "Sales Report",
@@ -169,11 +196,11 @@ const SalesReport = () => {
       meta: [
         { label: "Customers", value: selectedCustomerNames },
         { label: "Period", value: formatPdfPeriod(startDate, endDate) },
-        { label: "Bills", value: String(filteredSales.length) },
+        { label: "Bills", value: String(rows.length) },
       ],
       summary: [
         { label: "Total Sales", value: formatPdfAmount(totalAmount) },
-        { label: "Number of Sales", value: String(filteredSales.length) },
+        { label: "Number of Sales", value: String(rows.length) },
         { label: "Outstanding", value: formatPdfAmount(totalOutstanding), emphasize: true },
       ],
       columns: [
@@ -185,7 +212,7 @@ const SalesReport = () => {
         { header: "Overdue", width: 22, align: "center" },
         { header: "Credit Days", width: 24, align: "center" },
       ],
-      rows: filteredSales.map((sale) => [
+      rows: rows.map((sale) => [
         sale.sales_no || "—",
         sale.customer_name || "—",
         formatPdfDate(sale.date),
@@ -322,18 +349,18 @@ const SalesReport = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {filteredSales.length > 0 && (
+            {rows.length > 0 && (
               <div className="sticky top-0 z-10 bg-background pb-4">
                 <div className="bg-sidebar/5 rounded-lg p-4 shadow-sm">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Total Sales</span>
                     <span className="font-medium">
-                      {formatAmount(filteredSales.reduce((sum, sale) => sum + sale.total, 0))}
+                      {formatAmount(rows.reduce((sum, sale) => sum + sale.total, 0))}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Number of Sales</span>
-                    <span className="font-medium">{filteredSales.length}</span>
+                    <span className="font-medium">{rows.length}</span>
                   </div>
                 </div>
               </div>
@@ -343,19 +370,65 @@ const SalesReport = () => {
               <Table>
                 <TableHeader className="bg-sidebar">
                   <TableRow>
-                    <TableHead className="text-white rounded-tl-lg">Sales No</TableHead>
-                    <TableHead className="text-white">Customer</TableHead>
-                    <TableHead className="text-white">Date</TableHead>
-                    <TableHead className="text-white">Total</TableHead>
-                    <TableHead className="text-white">Outstanding</TableHead>
-                    <TableHead className="text-white">Credit Days</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Overdue Days</TableHead>
+                    <SortableHeader
+                      label="Sales No"
+                      sortKey="sales_no"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={`rounded-tl-lg ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Customer"
+                      sortKey="customer"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Date"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Total"
+                      sortKey="total"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Outstanding"
+                      sortKey="outstanding"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Credit Days"
+                      sortKey="credit_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Overdue Days"
+                      sortKey="overdue_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`rounded-tr-lg text-right ${sortableHeadClass}`}
+                    />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSales.length > 0 ? (
+                  {rows.length > 0 ? (
                     <>
-                      {filteredSales.map((sale) => (
+                      {rows.map((sale) => (
                         <TableRow key={sale.id} className="hover:bg-sidebar/10">
                           <TableCell className="font-medium">{sale.sales_no}</TableCell>
                           <TableCell>{sale.customer_name}</TableCell>
@@ -383,11 +456,11 @@ const SalesReport = () => {
                       <TableRow className="border-t-2 border-sidebar/20">
                         <TableCell colSpan={3} className="text-right font-medium">Total</TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatAmount(filteredSales.reduce((sum, sale) => sum + sale.total, 0))}
+                          {formatAmount(rows.reduce((sum, sale) => sum + sale.total, 0))}
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatAmount(
-                            filteredSales.reduce(
+                            rows.reduce(
                               (sum, sale) =>
                                 sum + (sale.payment_status === "FULL" ? 0 : (sale.remaining_amount ?? sale.total)),
                               0

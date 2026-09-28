@@ -7,7 +7,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -44,6 +43,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+
+const sortableHeadClass =
+  "text-white [&_button]:text-white [&_button]:hover:text-white";
 
 const formatAmount = (amount: number) => {
   return new Intl.NumberFormat("en-IN", {
@@ -113,29 +117,59 @@ const OutstandingReport = () => {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
-    return sales
-      .filter((sale) => {
-        const remaining = sale.remaining_amount ?? sale.total;
-        if (sale.payment_status === "FULL" || remaining <= 0) return false;
+    return sales.filter((sale) => {
+      const remaining = sale.remaining_amount ?? sale.total;
+      if (sale.payment_status === "FULL" || remaining <= 0) return false;
 
-        const saleDate = new Date(sale.date);
-        const inDateRange = saleDate >= start && saleDate <= end;
-        const customerMatch =
-          selectedCustomers.length === 0 ||
-          selectedCustomers.includes(sale.customer_id);
-        const overdueMatch =
-          viewMode === "all" || (sale.overdue_days || 0) > 0;
+      const saleDate = new Date(sale.date);
+      const inDateRange = saleDate >= start && saleDate <= end;
+      const customerMatch =
+        selectedCustomers.length === 0 ||
+        selectedCustomers.includes(sale.customer_id);
+      const overdueMatch =
+        viewMode === "all" || (sale.overdue_days || 0) > 0;
 
-        return inDateRange && customerMatch && overdueMatch;
-      })
-      .sort((a, b) => (b.overdue_days || 0) - (a.overdue_days || 0));
+      return inDateRange && customerMatch && overdueMatch;
+    });
   }, [sales, startDate, endDate, selectedCustomers, viewMode]);
 
-  const totalOutstanding = outstandingSales.reduce(
+  const getSortValue = useMemo(
+    () => (sale: any, key: string) => {
+      switch (key) {
+        case "sales_no":
+          return sale.sales_no;
+        case "customer":
+          return sale.customer_name;
+        case "date":
+          return sale.date ? new Date(sale.date) : null;
+        case "credit_days":
+          return sale.credit_days ?? 0;
+        case "total":
+          return sale.total;
+        case "outstanding":
+          return sale.remaining_amount ?? sale.total;
+        case "overdue_days":
+          return sale.overdue_days ?? 0;
+        case "status":
+          return sale.payment_status || "UNPAID";
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const { sort, toggleSort, rows } = useTableControls({
+    data: outstandingSales,
+    getSortValue,
+    defaultSort: { key: "overdue_days", direction: "desc" },
+  });
+
+  const totalOutstanding = rows.reduce(
     (sum, sale) => sum + (sale.remaining_amount ?? sale.total),
     0
   );
-  const overdueCount = outstandingSales.filter(
+  const overdueCount = rows.filter(
     (sale) => (sale.overdue_days || 0) > 0
   ).length;
 
@@ -153,7 +187,7 @@ const OutstandingReport = () => {
     ];
     const csvContent = [
       headers.join(","),
-      ...outstandingSales.map((sale) =>
+      ...rows.map((sale) =>
         [
           `"${sale.sales_no || ""}"`,
           `"${sale.customer_name || ""}"`,
@@ -200,7 +234,7 @@ const OutstandingReport = () => {
       ],
       summary: [
         { label: "Total Outstanding", value: formatPdfAmount(totalOutstanding), emphasize: true },
-        { label: "Unpaid / Partial Bills", value: String(outstandingSales.length) },
+        { label: "Unpaid / Partial Bills", value: String(rows.length) },
         { label: "Overdue Bills", value: String(overdueCount) },
       ],
       columns: [
@@ -212,7 +246,7 @@ const OutstandingReport = () => {
         { header: "Overdue", width: 22, align: "center" },
         { header: "Status", width: 28, align: "center" },
       ],
-      rows: outstandingSales.map((sale) => [
+      rows: rows.map((sale) => [
         sale.sales_no || "—",
         sale.customer_name || "—",
         formatPdfDate(sale.date),
@@ -380,7 +414,7 @@ const OutstandingReport = () => {
                   <span className="text-sm text-muted-foreground">
                     Outstanding Bills
                   </span>
-                  <span className="font-medium">{outstandingSales.length}</span>
+                  <span className="font-medium">{rows.length}</span>
                 </div>
                 <div className="flex justify-between items-center md:flex-col md:items-start md:gap-1">
                   <span className="text-sm text-muted-foreground">
@@ -395,32 +429,72 @@ const OutstandingReport = () => {
               <Table>
                 <TableHeader className="bg-sidebar">
                   <TableRow>
-                    <TableHead className="text-white rounded-tl-lg">
-                      Sales No
-                    </TableHead>
-                    <TableHead className="text-white">Customer</TableHead>
-                    <TableHead className="text-white">Bill Date</TableHead>
-                    <TableHead className="text-white text-right">
-                      Credit Days
-                    </TableHead>
-                    <TableHead className="text-white text-right">
-                      Bill Total
-                    </TableHead>
-                    <TableHead className="text-white text-right">
-                      Outstanding
-                    </TableHead>
-                    <TableHead className="text-white text-right">
-                      Overdue Days
-                    </TableHead>
-                    <TableHead className="text-white rounded-tr-lg">
-                      Status
-                    </TableHead>
+                    <SortableHeader
+                      label="Sales No"
+                      sortKey="sales_no"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={`rounded-tl-lg ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Customer"
+                      sortKey="customer"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Bill Date"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Credit Days"
+                      sortKey="credit_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Bill Total"
+                      sortKey="total"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Outstanding"
+                      sortKey="outstanding"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Overdue Days"
+                      sortKey="overdue_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Status"
+                      sortKey="status"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={`rounded-tr-lg ${sortableHeadClass}`}
+                    />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {outstandingSales.length > 0 ? (
+                  {rows.length > 0 ? (
                     <>
-                      {outstandingSales.map((sale) => (
+                      {rows.map((sale) => (
                         <TableRow key={sale.id} className="hover:bg-sidebar/10">
                           <TableCell className="font-medium">
                             {sale.sales_no}

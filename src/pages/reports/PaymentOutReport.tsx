@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { paymentsOutAPI } from "@/services/api";
 import { useToast } from "@/components/ui/use-toast";
@@ -21,11 +20,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
 
 const PaymentOutReport = () => {
   const [paymentsOut, setPaymentsOut] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filteredPayments, setFilteredPayments] = useState<any[]>([]);
+  const [dateFiltered, setDateFiltered] = useState<any[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -38,7 +39,7 @@ const PaymentOutReport = () => {
       const response = await paymentsOutAPI.getAll();
       const payments = response.data || [];
       setPaymentsOut(payments);
-      setFilteredPayments(payments);
+      setDateFiltered(payments);
     } catch (error) {
       console.error("Error fetching payments out:", error);
       toast({
@@ -59,23 +60,49 @@ const PaymentOutReport = () => {
       return paymentDate >= startDate && paymentDate <= endDate;
     });
     
-    setFilteredPayments(filtered);
+    setDateFiltered(filtered);
   };
 
+  const getSortValue = useMemo(
+    () => (payment: any, key: string) => {
+      switch (key) {
+        case "party":
+          return payment.supplier?.supplier_name || "";
+        case "amount":
+          return payment.amount ?? 0;
+        case "type":
+          return payment.type || "";
+        case "cheque_date":
+          return payment.cheque_date ? new Date(payment.cheque_date) : null;
+        case "date":
+          return payment.created_at ? new Date(payment.created_at) : null;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const { sort, toggleSort, rows } = useTableControls({
+    data: dateFiltered,
+    getSortValue,
+    defaultSort: { key: "date", direction: "desc" },
+  });
+
   const exportToPDF = () => {
-    const totalAmount = filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalAmount = rows.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     downloadReportPdf({
       title: "Payments Out Report",
       filename: `payments_out_report_${format(new Date(), "yyyy-MM-dd")}.pdf`,
       orientation: "landscape",
       meta: [
-        { label: "Entries", value: String(filteredPayments.length) },
+        { label: "Entries", value: String(rows.length) },
         { label: "Generated", value: format(new Date(), "dd/MM/yyyy HH:mm") },
       ],
       summary: [
         { label: "Total Paid", value: formatPdfAmount(totalAmount), emphasize: true },
-        { label: "Number of Payments", value: String(filteredPayments.length) },
+        { label: "Number of Payments", value: String(rows.length) },
       ],
       columns: [
         { header: "Supplier", align: "left" },
@@ -85,7 +112,7 @@ const PaymentOutReport = () => {
         { header: "Cheque Date", width: 28, align: "center" },
         { header: "Date", width: 28, align: "center" },
       ],
-      rows: filteredPayments.map((payment) => [
+      rows: rows.map((payment) => [
         payment.supplier ? payment.supplier.supplier_name : "—",
         formatPdfAmount(payment.amount, { prefix: false }),
         payment.type || "—",
@@ -98,7 +125,6 @@ const PaymentOutReport = () => {
   };
 
   const exportToCSV = () => {
-    // Create CSV content
     const headers = [
       "Supplier", 
       "Amount", 
@@ -109,7 +135,7 @@ const PaymentOutReport = () => {
     ];
     const csvContent = [
       headers.join(","),
-      ...filteredPayments.map((payment) => {
+      ...rows.map((payment) => {
         return [
           `"${payment.supplier ? payment.supplier.supplier_name : ''}"`,
           payment.amount,
@@ -121,7 +147,6 @@ const PaymentOutReport = () => {
       }),
     ].join("\n");
 
-    // Create and download CSV file
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -169,17 +194,17 @@ const PaymentOutReport = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Supplier</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Payment Type</TableHead>
+                <SortableHeader label="Supplier" sortKey="party" sort={sort} onSort={toggleSort} />
+                <SortableHeader label="Amount" sortKey="amount" sort={sort} onSort={toggleSort} align="right" className="text-right" />
+                <SortableHeader label="Payment Type" sortKey="type" sort={sort} onSort={toggleSort} />
                 <TableHead>Description</TableHead>
-                <TableHead>Cheque Date</TableHead>
-                <TableHead>Created Date</TableHead>
+                <SortableHeader label="Cheque Date" sortKey="cheque_date" sort={sort} onSort={toggleSort} />
+                <SortableHeader label="Created Date" sortKey="date" sort={sort} onSort={toggleSort} />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPayments.length > 0 ? (
-                filteredPayments.map((payment) => (
+              {rows.length > 0 ? (
+                rows.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell className="font-medium">
                       {payment.supplier ? payment.supplier.supplier_name : "-"}

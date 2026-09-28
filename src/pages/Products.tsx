@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -27,14 +27,17 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
-import { Package, Plus, Search, Edit, Trash } from "lucide-react";
+import { Package, Plus, Edit, Trash } from "lucide-react";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 import { useToast } from "@/components/ui/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { productsAPI } from "@/services/api";
+import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
 
 // Product type definition
 type Product = {
@@ -60,7 +63,6 @@ const productFormSchema = z.object({
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
 const Products = () => {
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -135,11 +137,73 @@ const Products = () => {
     }
   }, [error, toast]);
 
-  
+  const searchFns = useMemo(
+    () => [
+      (item: Product) => item.name,
+      (item: Product) => item.description,
+      (item: Product) => item.color,
+      (item: Product) => item.width,
+    ],
+    []
+  );
 
-  const filteredProducts = products?.filter((product) =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const getSortValue = useMemo(
+    () => (item: Product, key: string) => {
+      switch (key) {
+        case "name":
+          return item.name;
+        case "description":
+          return item.description;
+        case "width":
+          return item.width;
+        case "price":
+          return item.price;
+        case "color":
+          return item.color;
+        case "created_at":
+          return item.created_at;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "color",
+        label: "Color",
+        options: uniqueOptions(products?.map((i) => i.color) || []),
+        predicate: (item: Product, value: string) => item.color === value,
+      },
+      {
+        key: "width",
+        label: "Width",
+        options: uniqueOptions(products?.map((i) => i.width) || []),
+        predicate: (item: Product, value: string) => item.width === value,
+      },
+    ],
+    [products]
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: products,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "name", direction: "asc" },
+  });
 
   const onSubmit = async (values: ProductFormValues) => {
     if (!user) {
@@ -261,26 +325,26 @@ const Products = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search products..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search products..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Width</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Color</TableHead>
-                  <TableHead>Created At</TableHead>
+                  <SortableHeader label="Product Name" sortKey="name" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Description" sortKey="description" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Width" sortKey="width" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Price" sortKey="price" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Color" sortKey="color" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Created At" sortKey="created_at" sort={sort} onSort={toggleSort} />
                   <TableHead>Updated At</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -292,8 +356,8 @@ const Products = () => {
                       Loading products...
                     </TableCell>
                   </TableRow>
-                ) : filteredProducts.length > 0 ? (
-                  filteredProducts.map((product) => (
+                ) : rows.length > 0 ? (
+                  rows.map((product) => (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">
                         {product.name}

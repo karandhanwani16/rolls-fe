@@ -6,7 +6,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -43,6 +42,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+
+const sortableHeadClass =
+  "text-white [&_button]:text-white [&_button]:hover:text-white";
 
 const formatAmount = (amount: number) => {
   return new Intl.NumberFormat("en-IN", {
@@ -112,29 +116,59 @@ const PurchaseOutstandingReport = () => {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
-    return purchases
-      .filter((purchase) => {
-        const remaining = purchase.remaining_amount ?? purchase.total;
-        if (purchase.payment_status === "FULL" || remaining <= 0) return false;
+    return purchases.filter((purchase) => {
+      const remaining = purchase.remaining_amount ?? purchase.total;
+      if (purchase.payment_status === "FULL" || remaining <= 0) return false;
 
-        const purchaseDate = new Date(purchase.date);
-        const inDateRange = purchaseDate >= start && purchaseDate <= end;
-        const supplierMatch =
-          selectedSuppliers.length === 0 ||
-          selectedSuppliers.includes(purchase.supplier_id);
-        const overdueMatch =
-          viewMode === "all" || (purchase.overdue_days || 0) > 0;
+      const purchaseDate = new Date(purchase.date);
+      const inDateRange = purchaseDate >= start && purchaseDate <= end;
+      const supplierMatch =
+        selectedSuppliers.length === 0 ||
+        selectedSuppliers.includes(purchase.supplier_id);
+      const overdueMatch =
+        viewMode === "all" || (purchase.overdue_days || 0) > 0;
 
-        return inDateRange && supplierMatch && overdueMatch;
-      })
-      .sort((a, b) => (b.overdue_days || 0) - (a.overdue_days || 0));
+      return inDateRange && supplierMatch && overdueMatch;
+    });
   }, [purchases, startDate, endDate, selectedSuppliers, viewMode]);
 
-  const totalOutstanding = outstandingPurchases.reduce(
+  const getSortValue = useMemo(
+    () => (purchase: any, key: string) => {
+      switch (key) {
+        case "purchase_no":
+          return purchase.purchase_no;
+        case "supplier":
+          return purchase.supplier_name;
+        case "date":
+          return purchase.date ? new Date(purchase.date) : null;
+        case "credit_days":
+          return purchase.credit_days ?? 0;
+        case "total":
+          return purchase.total;
+        case "outstanding":
+          return purchase.remaining_amount ?? purchase.total;
+        case "overdue_days":
+          return purchase.overdue_days ?? 0;
+        case "status":
+          return purchase.payment_status || "UNPAID";
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const { sort, toggleSort, rows } = useTableControls({
+    data: outstandingPurchases,
+    getSortValue,
+    defaultSort: { key: "overdue_days", direction: "desc" },
+  });
+
+  const totalOutstanding = rows.reduce(
     (sum, purchase) => sum + (purchase.remaining_amount ?? purchase.total),
     0
   );
-  const overdueCount = outstandingPurchases.filter(
+  const overdueCount = rows.filter(
     (purchase) => (purchase.overdue_days || 0) > 0
   ).length;
 
@@ -152,7 +186,7 @@ const PurchaseOutstandingReport = () => {
     ];
     const csvContent = [
       headers.join(","),
-      ...outstandingPurchases.map((purchase) =>
+      ...rows.map((purchase) =>
         [
           `"${purchase.purchase_no || ""}"`,
           `"${purchase.supplier_name || ""}"`,
@@ -199,7 +233,7 @@ const PurchaseOutstandingReport = () => {
       ],
       summary: [
         { label: "Total Outstanding", value: formatPdfAmount(totalOutstanding), emphasize: true },
-        { label: "Unpaid / Partial Bills", value: String(outstandingPurchases.length) },
+        { label: "Unpaid / Partial Bills", value: String(rows.length) },
         { label: "Overdue Bills", value: String(overdueCount) },
       ],
       columns: [
@@ -211,7 +245,7 @@ const PurchaseOutstandingReport = () => {
         { header: "Overdue", width: 22, align: "center" },
         { header: "Status", width: 28, align: "center" },
       ],
-      rows: outstandingPurchases.map((purchase) => [
+      rows: rows.map((purchase) => [
         purchase.purchase_no || "—",
         purchase.supplier_name || "—",
         formatPdfDate(purchase.date),
@@ -379,7 +413,7 @@ const PurchaseOutstandingReport = () => {
                   <span className="text-sm text-muted-foreground">
                     Outstanding Bills
                   </span>
-                  <span className="font-medium">{outstandingPurchases.length}</span>
+                  <span className="font-medium">{rows.length}</span>
                 </div>
                 <div className="flex justify-between items-center md:flex-col md:items-start md:gap-1">
                   <span className="text-sm text-muted-foreground">
@@ -394,32 +428,72 @@ const PurchaseOutstandingReport = () => {
               <Table>
                 <TableHeader className="bg-sidebar">
                   <TableRow>
-                    <TableHead className="text-white rounded-tl-lg">
-                      Purchase No
-                    </TableHead>
-                    <TableHead className="text-white">Supplier</TableHead>
-                    <TableHead className="text-white">Bill Date</TableHead>
-                    <TableHead className="text-white text-right">
-                      Credit Days
-                    </TableHead>
-                    <TableHead className="text-white text-right">
-                      Bill Total
-                    </TableHead>
-                    <TableHead className="text-white text-right">
-                      Outstanding
-                    </TableHead>
-                    <TableHead className="text-white text-right">
-                      Overdue Days
-                    </TableHead>
-                    <TableHead className="text-white rounded-tr-lg">
-                      Status
-                    </TableHead>
+                    <SortableHeader
+                      label="Purchase No"
+                      sortKey="purchase_no"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={`rounded-tl-lg ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Supplier"
+                      sortKey="supplier"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Bill Date"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Credit Days"
+                      sortKey="credit_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Bill Total"
+                      sortKey="total"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Outstanding"
+                      sortKey="outstanding"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Overdue Days"
+                      sortKey="overdue_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Status"
+                      sortKey="status"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={`rounded-tr-lg ${sortableHeadClass}`}
+                    />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {outstandingPurchases.length > 0 ? (
+                  {rows.length > 0 ? (
                     <>
-                      {outstandingPurchases.map((purchase) => (
+                      {rows.map((purchase) => (
                         <TableRow key={purchase.id} className="hover:bg-sidebar/10">
                           <TableCell className="font-medium">
                             {purchase.purchase_no}

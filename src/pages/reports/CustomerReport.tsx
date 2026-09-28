@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
 import { customersAPI } from "@/services/api";
 import { getRegularCustomers } from "@/lib/partyTypes";
@@ -37,6 +37,8 @@ import {
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTableControls } from "@/hooks/useTableControls";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 
 const formatAmount = (amount: number) => {
   return new Intl.NumberFormat('en-IN', {
@@ -211,6 +213,28 @@ const CustomerReport = () => {
 
   const selectedCustomerName = customers.find(c => c.id === selectedCustomer)?.name || "Select customer...";
 
+  // Search only — keep chronological order for running balance
+  const searchFns = useMemo(
+    () => [
+      (item: any) => item.particulars,
+      (item: any) => item.voucherNo,
+    ],
+    []
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    clearFilters,
+    hasActiveFilters,
+    rows,
+  } = useTableControls({
+    data: transactions.data,
+    searchFns,
+    getSortValue: () => null,
+    defaultSort: { key: null, direction: "asc" },
+  });
+
   return (
     <ReportLayout
       title="Customer Transactions Report"
@@ -300,6 +324,17 @@ const CustomerReport = () => {
           </div>
         </div>
 
+        {transactions.data.length > 0 && (
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search voucher or particulars..."
+            onFilterChange={() => {}}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
+        )}
+
         {loading ? (
           <div className="flex justify-center items-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -380,9 +415,9 @@ const CustomerReport = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.data.length > 0 ? (
+                  {rows.length > 0 ? (
                     <>
-                      {transactions.data.map((item) => (
+                      {rows.map((item) => (
                         <TableRow
                           key={item.srno}
                           className={cn(

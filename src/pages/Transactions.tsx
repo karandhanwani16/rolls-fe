@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -16,7 +15,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogClose
 } from "@/components/ui/dialog";
@@ -37,13 +35,16 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { CreditCard, Plus, Search, Edit, Trash2 } from "lucide-react";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
+import { CreditCard, Plus, Edit, Trash2 } from "lucide-react";
 import { transactionsAPI } from "@/services/api";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
 
 // Form schema
 const transactionSchema = z.object({
@@ -57,7 +58,6 @@ const transactionSchema = z.object({
 type TransactionFormValues = z.infer<typeof transactionSchema>;
 
 const Transactions = () => {
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentTransaction, setCurrentTransaction] = useState<any>(null);
@@ -157,12 +157,66 @@ const Transactions = () => {
     },
   });
 
-  // Filter transactions
-  const filteredTransactions = transactionsData?.filter((transaction: any) => {
-    return transaction.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           transaction.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           transaction.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           transaction.supplier?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+  const searchFns = useMemo(
+    () => [
+      (t: any) => t.description,
+      (t: any) => t.type,
+      (t: any) => t.customer?.name,
+      (t: any) => t.supplier?.name,
+    ],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (t: any, key: string) => {
+      switch (key) {
+        case "type":
+          return t.type;
+        case "description":
+          return t.description;
+        case "party":
+          return t.customer?.name || t.supplier?.name;
+        case "amount":
+          return t.amount ?? 0;
+        case "created_at":
+          return t.created_at ? new Date(t.created_at) : null;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "type",
+        label: "Type",
+        options: uniqueOptions((transactionsData || []).map((t: any) => t.type), (v) =>
+          v.charAt(0).toUpperCase() + v.slice(1)
+        ),
+        predicate: (t: any, value: string) => t.type === value,
+      },
+    ],
+    [transactionsData]
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: transactionsData,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "created_at", direction: "desc" },
   });
 
   // Handle edit button click
@@ -203,27 +257,25 @@ const Transactions = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search transactions..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search transactions..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Customer / Supplier</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Date</TableHead>
+                  <SortableHeader label="Type" sortKey="type" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Description" sortKey="description" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Customer / Supplier" sortKey="party" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Amount" sortKey="amount" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Date" sortKey="created_at" sort={sort} onSort={toggleSort} />
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -234,8 +286,8 @@ const Transactions = () => {
                       Loading...
                     </TableCell>
                   </TableRow>
-                ) : filteredTransactions?.length > 0 ? (
-                  filteredTransactions.map((transaction: any) => (
+                ) : rows.length > 0 ? (
+                  rows.map((transaction: any) => (
                     <TableRow key={transaction.id}>
                       <TableCell className="capitalize">{transaction.type}</TableCell>
                       <TableCell>{transaction.description || "-"}</TableCell>

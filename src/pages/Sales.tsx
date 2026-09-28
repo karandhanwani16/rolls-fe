@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { salesAPI } from "@/services/api";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -17,7 +16,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -27,7 +25,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ShoppingBag,
-  Search,
   Plus,
   MoreVertical,
   Eye,
@@ -39,11 +36,13 @@ import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { printSaleDocument } from "@/lib/downloadSalePdf";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 
 const Sales = () => {
   const [sales, setSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
   const { toast: toastNotification } = useToast();
   const [selectedSale, setSelectedSale] = useState<any>(null);
@@ -119,11 +118,89 @@ const Sales = () => {
     }
   };
 
-  const filteredSales = sales.filter(
-    (sale) =>
-      sale.sales_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const searchFns = useMemo(
+    () => [
+      (sale: any) => sale.sales_no,
+      (sale: any) => sale.customer_name,
+      (sale: any) => sale.description,
+    ],
+    []
   );
+
+  const getSortValue = useMemo(
+    () => (sale: any, key: string) => {
+      switch (key) {
+        case "sales_no":
+          return sale.sales_no;
+        case "customer_name":
+          return sale.customer_name;
+        case "date":
+          return sale.date ? new Date(sale.date) : null;
+        case "total":
+          return sale.total;
+        case "remaining_amount":
+          return (
+            sale.remaining_amount ??
+            (sale.payment_status === "FULL" ? 0 : sale.total)
+          );
+        case "overdue_days":
+          return sale.overdue_days ?? 0;
+        case "rolls":
+          return sale.items?.length ?? 0;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "payment_status",
+        label: "Payment Status",
+        options: [
+          { value: "paid", label: "Paid" },
+          { value: "outstanding", label: "Outstanding" },
+        ],
+        predicate: (sale: any, value: string) => {
+          if (value === "paid") return sale.payment_status === "FULL";
+          if (value === "outstanding") return sale.payment_status !== "FULL";
+          return true;
+        },
+      },
+      {
+        key: "overdue",
+        label: "Overdue",
+        options: [{ value: "overdue", label: "Overdue" }],
+        predicate: (sale: any, value: string) => {
+          if (value === "overdue") {
+            return (sale.overdue_days || 0) > 0 && sale.payment_status !== "FULL";
+          }
+          return true;
+        },
+      },
+    ],
+    []
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: sales,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "date", direction: "desc" },
+  });
 
   return (
     <DashboardLayout>
@@ -138,17 +215,15 @@ const Sales = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search sales..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search sales..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           {loading ? (
             <div className="flex justify-center items-center p-8">
@@ -159,19 +234,63 @@ const Sales = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Sale No.</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Outstanding</TableHead>
-                    <TableHead className="text-right">Overdue Days</TableHead>
+                    <SortableHeader
+                      label="Sale No."
+                      sortKey="sales_no"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Customer"
+                      sortKey="customer_name"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Date"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Rolls"
+                      sortKey="rolls"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
+                    <SortableHeader
+                      label="Amount"
+                      sortKey="total"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
+                    <SortableHeader
+                      label="Outstanding"
+                      sortKey="remaining_amount"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
+                    <SortableHeader
+                      label="Overdue Days"
+                      sortKey="overdue_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSales.length > 0 ? (
-                    filteredSales.map((sale) => (
+                  {rows.length > 0 ? (
+                    rows.map((sale) => (
                       <TableRow key={sale.id}>
                         <TableCell className="font-medium whitespace-nowrap">
                           {sale.sales_no}
@@ -181,6 +300,9 @@ const Sales = () => {
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {format(new Date(sale.date), "dd MMM yyyy")}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          {sale.items?.length ?? 0}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           {new Intl.NumberFormat("en-IN", {
@@ -264,7 +386,7 @@ const Sales = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         No sales found.
                       </TableCell>
                     </TableRow>

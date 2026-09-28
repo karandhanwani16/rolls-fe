@@ -1,13 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { format as formatDate } from "date-fns";
 import {
   Download,
-  FileText,
-  FileSpreadsheet
+  FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -18,13 +17,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Command,
   CommandEmpty,
@@ -38,20 +30,17 @@ import {
   PopoverTrigger as CommandPopoverTrigger,
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown } from "lucide-react";
-import { stockReportAPI, productsAPI, customersAPI } from "@/services/api";
+import { stockReportAPI, productsAPI } from "@/services/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { downloadReportPdf } from "@/lib/reportPdf";
-
-interface Customer {
-  id: string;
-  name: string;
-}
+import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 
 interface Product {
   id: string;
@@ -80,7 +69,6 @@ const StockReport = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
   const [productOpen, setProductOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchProducts();
@@ -125,14 +113,66 @@ const StockReport = () => {
     }
   };
 
-  // Filter stock data based on search query
-  const filteredStockData = stockData.filter(item =>
-    item.product_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.roll_no.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.shade || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.godown.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.meters.toString().includes(searchQuery)
+  const searchFns = useMemo(
+    () => [
+      (item: StockItem) => item.product_name,
+      (item: StockItem) => item.roll_no,
+      (item: StockItem) => item.shade,
+      (item: StockItem) => item.godown,
+      (item: StockItem) => item.meters,
+    ],
+    []
   );
+
+  const getSortValue = useMemo(
+    () => (item: StockItem, key: string) => {
+      switch (key) {
+        case "product_name":
+          return item.product_name;
+        case "roll_no":
+          return item.roll_no;
+        case "shade":
+          return item.shade || "";
+        case "meters":
+          return item.meters;
+        case "godown":
+          return item.godown;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "godown",
+        label: "Godown",
+        options: uniqueOptions(stockData.map((item) => item.godown)),
+        predicate: (item: StockItem, value: string) => item.godown === value,
+      },
+    ],
+    [stockData]
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: stockData,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "product_name", direction: "asc" },
+  });
 
   const handleExport = async (format: 'pdf' | 'csv' | 'xlsx') => {
 
@@ -141,7 +181,7 @@ const StockReport = () => {
         const productLabel = selectedProducts.length > 0
           ? selectedProducts.map((p) => p.name).join(", ")
           : "All Products";
-        const rows = (filteredStockData.length ? filteredStockData : stockData);
+        const exportRows = rows.length ? rows : stockData;
 
         downloadReportPdf({
           title: "Stock Report",
@@ -150,10 +190,10 @@ const StockReport = () => {
           meta: [
             { label: "Products", value: productLabel },
             { label: "As of", value: formatDate(new Date(), "dd/MM/yyyy") },
-            { label: "Rolls", value: String(rows.length) },
+            { label: "Rolls", value: String(exportRows.length) },
           ],
           summary: [
-            { label: "Total Rolls", value: String(rows.length), emphasize: true },
+            { label: "Total Rolls", value: String(exportRows.length), emphasize: true },
           ],
           columns: [
             { header: "Sr.", width: 16, align: "center" },
@@ -163,7 +203,7 @@ const StockReport = () => {
             { header: "Quantity", width: 32, align: "right" },
             { header: "Godown", width: 40 },
           ],
-          rows: rows.map((item, index) => [
+          rows: exportRows.map((item, index) => [
             index + 1,
             item.product_name || "—",
             item.roll_no || "—",
@@ -231,14 +271,15 @@ const StockReport = () => {
         ) : (
           <Card>
             <CardHeader>
-              <div className="flex flex-wrap gap-2 mt-2">
-                <Input
-                  type="text"
-                  placeholder="Search by product name, roll number, or godown"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-[300px]"
-                />
+              <TableToolbar
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                searchPlaceholder="Search by product, roll, shade, or godown"
+                filters={filterDefs}
+                onFilterChange={setFilter}
+                onClear={clearFilters}
+                hasActiveFilters={hasActiveFilters}
+              >
                 <CommandPopover open={productOpen} onOpenChange={setProductOpen}>
                   <CommandPopoverTrigger asChild>
                     <Button
@@ -299,22 +340,52 @@ const StockReport = () => {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
+              </TableToolbar>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader className="bg-sidebar ">
                   <TableRow>
                     <TableHead className="text-white rounded-tl-lg rounded-bl-lg">Sr. No.</TableHead>
-                    <TableHead className="text-white">Product Name</TableHead>
-                    <TableHead className="text-white">Roll No.</TableHead>
-                    <TableHead className="text-white">Shade</TableHead>
-                    <TableHead className="text-white">Quantity</TableHead>
-                    <TableHead className="text-white rounded-tr-lg rounded-br-lg">Godown</TableHead>
+                    <SortableHeader
+                      label="Product Name"
+                      sortKey="product_name"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className="text-white [&_button]:text-white [&_button]:hover:text-white"
+                    />
+                    <SortableHeader
+                      label="Roll No."
+                      sortKey="roll_no"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className="text-white [&_button]:text-white [&_button]:hover:text-white"
+                    />
+                    <SortableHeader
+                      label="Shade"
+                      sortKey="shade"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className="text-white [&_button]:text-white [&_button]:hover:text-white"
+                    />
+                    <SortableHeader
+                      label="Quantity"
+                      sortKey="meters"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className="text-white [&_button]:text-white [&_button]:hover:text-white"
+                    />
+                    <SortableHeader
+                      label="Godown"
+                      sortKey="godown"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className="text-white rounded-tr-lg rounded-br-lg [&_button]:text-white [&_button]:hover:text-white"
+                    />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredStockData.map((item, index) => (
+                  {rows.map((item, index) => (
                     <TableRow className="hover:bg-sidebar/10 hover:cursor-pointer" key={index}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>{item.product_name}</TableCell>
@@ -334,4 +405,4 @@ const StockReport = () => {
   );
 };
 
-export default StockReport; 
+export default StockReport;

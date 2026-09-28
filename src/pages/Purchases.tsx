@@ -1,20 +1,17 @@
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { 
   Plus, 
-  Search, 
   Edit, 
   Trash2, 
   FileText, 
-  ArrowUpDown 
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -42,6 +39,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/components/ui/use-toast";
 import { purchasesAPI } from "@/services/api";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 
 type Purchase = {
   id: string;
@@ -59,13 +59,13 @@ type Purchase = {
   remaining_amount?: number;
   payment_status?: string;
   overdue_days?: number;
+  items?: unknown[];
   created_at: string;
   updated_at: string;
 };
 
 const Purchases = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [purchaseToDelete, setPurchaseToDelete] = useState<string | null>(null);
 
@@ -83,14 +83,91 @@ const Purchases = () => {
     }
   });
 
-  // Filter purchases based on search term
-  const filteredPurchases = purchasesData?.filter((purchase: Purchase) => {
-    const searchString = searchTerm.toLowerCase();
-    return (
-      purchase.supplier_name.toLowerCase().includes(searchString) ||
-      purchase.purchase_no.toLowerCase().includes(searchString) ||
-      (purchase.description && purchase.description.toLowerCase().includes(searchString))
-    );
+  const searchFns = useMemo(
+    () => [
+      (purchase: Purchase) => purchase.purchase_no,
+      (purchase: Purchase) => purchase.supplier_name,
+      (purchase: Purchase) => purchase.description,
+    ],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (purchase: Purchase, key: string) => {
+      switch (key) {
+        case "purchase_no":
+          return purchase.purchase_no;
+        case "supplier_name":
+          return purchase.supplier_name;
+        case "date":
+          return purchase.date ? new Date(purchase.date) : null;
+        case "total":
+          return purchase.total;
+        case "remaining_amount":
+          return (
+            purchase.remaining_amount ??
+            (purchase.payment_status === "FULL" ? 0 : purchase.total)
+          );
+        case "overdue_days":
+          return purchase.overdue_days ?? 0;
+        case "rolls":
+          return purchase.items?.length ?? 0;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const filters = useMemo(
+    () => [
+      {
+        key: "payment_status",
+        label: "Payment Status",
+        options: [
+          { value: "paid", label: "Paid" },
+          { value: "outstanding", label: "Outstanding" },
+        ],
+        predicate: (purchase: Purchase, value: string) => {
+          if (value === "paid") return purchase.payment_status === "FULL";
+          if (value === "outstanding") return purchase.payment_status !== "FULL";
+          return true;
+        },
+      },
+      {
+        key: "overdue",
+        label: "Overdue",
+        options: [{ value: "overdue", label: "Overdue" }],
+        predicate: (purchase: Purchase, value: string) => {
+          if (value === "overdue") {
+            return (
+              (purchase.overdue_days || 0) > 0 &&
+              purchase.payment_status !== "FULL"
+            );
+          }
+          return true;
+        },
+      },
+    ],
+    []
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: purchasesData,
+    searchFns,
+    getSortValue,
+    filters,
+    defaultSort: { key: "date", direction: "desc" },
   });
 
   // Handle delete confirmation
@@ -149,40 +226,77 @@ const Purchases = () => {
 
         <Card>
           <CardHeader>
-            <div className="flex flex-col md:flex-row justify-between md:items-center">
-              <div>
-                <CardTitle>Purchase Records</CardTitle>
-                <CardDescription>
-                  {isLoading ? 'Loading...' : `${filteredPurchases?.length || 0} purchases found`}
-                </CardDescription>
-              </div>
-              <div className="mt-4 md:mt-0 relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search purchases..."
-                  className="pl-8 w-full md:w-[250px]"
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
-              </div>
+            <div>
+              <CardTitle>Purchase Records</CardTitle>
+              <CardDescription>
+                {isLoading ? 'Loading...' : `${rows.length} purchases found`}
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent>
+            <TableToolbar
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              searchPlaceholder="Search purchases..."
+              filters={filterDefs}
+              onFilterChange={setFilter}
+              onClear={clearFilters}
+              hasActiveFilters={hasActiveFilters}
+            />
             <div className="rounded-md border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>
-                      <div className="flex items-center">
-                        Purchase # <ArrowUpDown className="ml-1 h-3 w-3" />
-                      </div>
-                    </TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Outstanding</TableHead>
-                    <TableHead className="text-right">Overdue Days</TableHead>
+                    <SortableHeader
+                      label="Purchase #"
+                      sortKey="purchase_no"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Supplier"
+                      sortKey="supplier_name"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Date"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
+                    <SortableHeader
+                      label="Rolls"
+                      sortKey="rolls"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
+                    <SortableHeader
+                      label="Amount"
+                      sortKey="total"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
+                    <SortableHeader
+                      label="Outstanding"
+                      sortKey="remaining_amount"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
+                    <SortableHeader
+                      label="Overdue Days"
+                      sortKey="overdue_days"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className="text-right"
+                    />
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -190,18 +304,18 @@ const Purchases = () => {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6">
+                      <TableCell colSpan={9} className="text-center py-6">
                         Loading purchases data...
                       </TableCell>
                     </TableRow>
-                  ) : filteredPurchases?.length === 0 ? (
+                  ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6">
+                      <TableCell colSpan={9} className="text-center py-6">
                         No purchases found. Create your first purchase by clicking "New Purchase" above.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredPurchases?.map((purchase: Purchase) => (
+                    rows.map((purchase: Purchase) => (
                       <TableRow key={purchase.id}>
                         <TableCell className="font-medium">
                           {purchase.purchase_no}
@@ -209,6 +323,9 @@ const Purchases = () => {
                         <TableCell>{purchase.supplier_name}</TableCell>
                         <TableCell>
                           {format(new Date(purchase.date), 'dd MMM yyyy')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {purchase.items?.length ?? 0}
                         </TableCell>
                         <TableCell className="text-right">
                           ₹{purchase.total.toLocaleString('en-IN')}

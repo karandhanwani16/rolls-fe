@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -27,13 +27,16 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
-import { FileText, Plus, Search, Edit, Trash, Loader2 } from "lucide-react";
+import { FileText, Plus, Edit, Trash, Loader2 } from "lucide-react";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 import { useToast } from "@/components/ui/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { godownsAPI } from "@/services/api";
+import { useTableControls } from "@/hooks/useTableControls";
 
 // Godown type definition
 type Godown = {
@@ -51,7 +54,6 @@ const godownFormSchema = z.object({
 type GodownFormValues = z.infer<typeof godownFormSchema>;
 
 const Godowns = () => {
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -115,10 +117,43 @@ const Godowns = () => {
     }
   }, [error, toast]);
 
-  const filteredGodowns = godowns?.filter((godown) => {
-    return godown.name.toLowerCase().includes(searchTerm.toLowerCase())
-  }
-  ) || [];
+  const searchFns = useMemo(
+    () => [(item: Godown) => item.name],
+    []
+  );
+
+  const getSortValue = useMemo(
+    () => (item: Godown, key: string) => {
+      switch (key) {
+        case "name":
+          return item.name;
+        case "created_at":
+          return item.created_at;
+        case "updated_at":
+          return item.updated_at;
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    sort,
+    toggleSort,
+    setFilter,
+    clearFilters,
+    hasActiveFilters,
+    filterDefs,
+    rows,
+  } = useTableControls({
+    data: godowns,
+    searchFns,
+    getSortValue,
+    defaultSort: { key: "name", direction: "asc" },
+  });
 
   const onSubmit = async (values: GodownFormValues) => {
     if (!user) {
@@ -228,23 +263,23 @@ const Godowns = () => {
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search godowns..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <TableToolbar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search godowns..."
+            filters={filterDefs}
+            onFilterChange={setFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Godown Name</TableHead>
-                  <TableHead>Created At</TableHead>
-                  <TableHead>Updated At</TableHead>
+                  <SortableHeader label="Godown Name" sortKey="name" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Created At" sortKey="created_at" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Updated At" sortKey="updated_at" sort={sort} onSort={toggleSort} />
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -255,8 +290,8 @@ const Godowns = () => {
                       Loading godowns...
                     </TableCell>
                   </TableRow>
-                ) : filteredGodowns.length > 0 ? (
-                  filteredGodowns.map((godown) => (
+                ) : rows.length > 0 ? (
+                  rows.map((godown) => (
                     <TableRow key={godown.godown_id}>
                       <TableCell className="font-medium">
                         {godown.name}
