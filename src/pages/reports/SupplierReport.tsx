@@ -47,6 +47,9 @@ const formatAmount = (amount: number) => {
   }).format(amount);
 };
 
+const amountHeadClass = "text-white text-right";
+const amountCellClass = "text-right tabular-nums";
+
 const SupplierReport = () => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -373,9 +376,9 @@ const SupplierReport = () => {
                     <TableHead className="text-white">Date</TableHead>
                     <TableHead className="text-white">Particulars</TableHead>
                     <TableHead className="text-white">Voucher No.</TableHead>
-                    <TableHead className="text-white">Debit</TableHead>
-                    <TableHead className="text-white">Credit</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Balance</TableHead>
+                    <TableHead className={amountHeadClass}>Debit</TableHead>
+                    <TableHead className={amountHeadClass}>Credit</TableHead>
+                    <TableHead className={cn(amountHeadClass, "rounded-tr-lg")}>Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -393,20 +396,20 @@ const SupplierReport = () => {
                           <TableCell>{format(new Date(item.date), "yyyy-MM-dd")}</TableCell>
                           <TableCell>{item.particulars}</TableCell>
                           <TableCell>{item.voucherNo}</TableCell>
-                          <TableCell className="text-right">{formatAmount(item.debit)}</TableCell>
-                          <TableCell className="text-right">{formatAmount(item.credit)}</TableCell>
-                          <TableCell className="text-right">{formatAmount(item.balance ?? 0)}</TableCell>
+                          <TableCell className={amountCellClass}>{formatAmount(item.debit)}</TableCell>
+                          <TableCell className={amountCellClass}>{formatAmount(item.credit)}</TableCell>
+                          <TableCell className={amountCellClass}>{formatAmount(item.balance ?? 0)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="border-t-2 border-sidebar/20">
                         <TableCell colSpan={4} className="text-right font-medium">Total</TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell className={cn(amountCellClass, "font-medium")}>
                           {formatAmount(transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0))}
                         </TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell className={cn(amountCellClass, "font-medium")}>
                           {formatAmount(transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0))}
                         </TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell className={cn(amountCellClass, "font-medium")}>
                           {formatAmount(getClosingBalance())}
                         </TableCell>
                       </TableRow>

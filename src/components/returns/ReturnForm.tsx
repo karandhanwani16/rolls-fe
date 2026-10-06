@@ -133,6 +133,9 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
       queryClient.invalidateQueries({
         queryKey: [isSales ? "sales-returns" : "purchase-returns"],
       });
+      if (!isSales) {
+        queryClient.invalidateQueries({ queryKey: ["stock-report"] });
+      }
       toast.success(
         `${isSales ? "Sales" : "Purchase"} return ${id ? "updated" : "created"} successfully`
       );

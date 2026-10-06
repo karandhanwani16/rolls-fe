@@ -49,6 +49,27 @@ const formatAmount = (amount: number) => {
   }).format(amount);
 };
 
+const amountHeadClass = "text-white text-right";
+const amountCellClass = "text-right tabular-nums";
+
+/** Payments have no sale voucher; never show internal payment IDs in the report. */
+const formatTransactionVoucherNo = (item: {
+  voucherNo?: string;
+  paymentCategory?: string | null;
+}) => {
+  if (item.paymentCategory) return "—";
+  const voucher = item.voucherNo?.trim();
+  if (!voucher || voucher === "-") return "—";
+  if (/^c[a-z0-9]{8,}$/i.test(voucher)) return "—";
+  return voucher;
+};
+
+/** jsPDF Helvetica cannot render ₹; normalize for consistent UI/PDF typography. */
+const formatTransactionParticulars = (particulars?: string) => {
+  if (!particulars) return "—";
+  return particulars.replace(/\u20B9/g, "Rs. ");
+};
+
 const CustomerReport = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,8 +153,8 @@ const CustomerReport = () => {
         return [
           item.srno,
           format(new Date(item.date), "yyyy-MM-dd"),
-          `"${item.particulars}"`,
-          `"${item.voucherNo}"`,
+          `"${formatTransactionParticulars(item.particulars)}"`,
+          `"${formatTransactionVoucherNo(item)}"`,
           formatAmount(item.debit),
           formatAmount(item.credit),
           formatAmount(item.balance ?? 0),
@@ -195,8 +216,8 @@ const CustomerReport = () => {
       rows: transactions.data.map((item) => [
         item.srno,
         formatPdfDate(item.date),
-        item.particulars || "—",
-        item.voucherNo || "—",
+        formatTransactionParticulars(item.particulars),
+        formatTransactionVoucherNo(item),
         formatPdfAmount(item.debit, { blankZero: true, prefix: false }),
         formatPdfAmount(item.credit, { blankZero: true, prefix: false }),
         formatPdfAmount(item.balance ?? 0, { prefix: false }),
@@ -409,9 +430,9 @@ const CustomerReport = () => {
                     <TableHead className="text-white">Date</TableHead>
                     <TableHead className="text-white">Particulars</TableHead>
                     <TableHead className="text-white">Voucher No.</TableHead>
-                    <TableHead className="text-white">Debit</TableHead>
-                    <TableHead className="text-white">Credit</TableHead>
-                    <TableHead className="text-white rounded-tr-lg">Balance</TableHead>
+                    <TableHead className={amountHeadClass}>Debit</TableHead>
+                    <TableHead className={amountHeadClass}>Credit</TableHead>
+                    <TableHead className={cn(amountHeadClass, "rounded-tr-lg")}>Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -427,22 +448,22 @@ const CustomerReport = () => {
                         >
                           <TableCell>{item.srno}</TableCell>
                           <TableCell>{format(new Date(item.date), "yyyy-MM-dd")}</TableCell>
-                          <TableCell>{item.particulars}</TableCell>
-                          <TableCell>{item.voucherNo}</TableCell>
-                          <TableCell className="text-right">{formatAmount(item.debit)}</TableCell>
-                          <TableCell className="text-right">{formatAmount(item.credit)}</TableCell>
-                          <TableCell className="text-right">{formatAmount(item.balance ?? 0)}</TableCell>
+                          <TableCell>{formatTransactionParticulars(item.particulars)}</TableCell>
+                          <TableCell>{formatTransactionVoucherNo(item)}</TableCell>
+                          <TableCell className={amountCellClass}>{formatAmount(item.debit)}</TableCell>
+                          <TableCell className={amountCellClass}>{formatAmount(item.credit)}</TableCell>
+                          <TableCell className={amountCellClass}>{formatAmount(item.balance ?? 0)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="border-t-2 border-sidebar/20">
                         <TableCell colSpan={4} className="text-right font-medium">Total</TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell className={cn(amountCellClass, "font-medium")}>
                           {formatAmount(transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0))}
                         </TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell className={cn(amountCellClass, "font-medium")}>
                           {formatAmount(transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0))}
                         </TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell className={cn(amountCellClass, "font-medium")}>
                           {formatAmount(getClosingBalance())}
                         </TableCell>
                       </TableRow>
