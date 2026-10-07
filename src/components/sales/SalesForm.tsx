@@ -200,24 +200,29 @@ const SalesForm = () => {
             const allRolls = initialRollPool[item.product_id] || [];
 
             // Get all rolls that are already selected in other items for the same product
-            const selectedRolls = response.items
+            const selectedStockRollIds = response.items
               .filter(
                 (otherItem: any) =>
                   otherItem.sales_item_id !== item.sales_item_id &&
-                  otherItem.product_id === item.product_id
+                  otherItem.product_id === item.product_id &&
+                  (otherItem.purchase_item_id || otherItem.roll_id)
               )
-              .map((otherItem: any) => otherItem.roll_no);
+              .map((otherItem: any) =>
+                String(otherItem.purchase_item_id || otherItem.roll_id)
+              );
 
             // Filter out already selected rolls
             let availableRolls = allRolls.filter(
-              (roll: any) => !selectedRolls.includes(roll.roll_no)
+              (roll: any) => !selectedStockRollIds.includes(String(roll.id))
             );
 
             // Add the current roll to available rolls if it's not already there
             // BUT only if it's a real stock roll (has purchase_item_id), not a custom roll
             if (item.roll_no && item.purchase_item_id) {
               const currentRoll = availableRolls.find(
-                (r: any) => r.roll_no === item.roll_no
+                (r: any) =>
+                  String(r.id) ===
+                  String(item.purchase_item_id || item.roll_id)
               );
               if (!currentRoll) {
                 const rollToAdd = {
@@ -421,7 +426,9 @@ const SalesForm = () => {
         const currentItem = formData.items[index];
         if (currentItem.roll_no && currentItem.purchase_item_id) {
           const currentRoll = availableRolls.find(
-            (r: any) => r.roll_no === currentItem.roll_no
+            (r: any) =>
+              String(r.id) ===
+              String(currentItem.purchase_item_id || currentItem.roll_id)
           );
           if (!currentRoll) {
             availableRolls.push({
@@ -460,10 +467,10 @@ const SalesForm = () => {
     }
   };
 
-  const handleRollChange = (index: number, rollNo: string) => {
+  const handleRollChange = (index: number, stockRollId: string) => {
     const item = formData.items[index];
     const selectedRoll = allRollsPool[item.product_id]?.find(
-      (r) => r.roll_no === rollNo
+      (r) => String(r.id) === String(stockRollId)
     );
 
     if (selectedRoll) {
@@ -626,19 +633,23 @@ const SalesForm = () => {
     if (!productId) return [];
 
     const allRolls = allRollsPool[productId] || [];
-    const selectedRolls = formData.items
+    const selectedStockRollIds = formData.items
       .filter(
         (item, idx) =>
-          idx !== currentIndex && item.product_id === productId && item.roll_no
+          idx !== currentIndex &&
+          item.product_id === productId &&
+          (item.purchase_item_id || item.roll_id)
       )
-      .map((item) => item.roll_no);
+      .map((item) => String(item.purchase_item_id || item.roll_id));
 
     // If we're editing and the current item has a roll_no, make sure it's included
     // BUT only if it's a real stock roll (has purchase_item_id), not a custom roll
     const currentItem = formData.items[currentIndex];
     if (currentItem?.roll_no && currentItem?.purchase_item_id) {
       const currentRoll = allRolls.find(
-        (r) => r.roll_no === currentItem.roll_no
+        (r) =>
+          String(r.id) ===
+          String(currentItem.purchase_item_id || currentItem.roll_id)
       );
       if (!currentRoll) {
         allRolls.push({
@@ -650,7 +661,9 @@ const SalesForm = () => {
       }
     }
 
-    return allRolls.filter((roll) => !selectedRolls.includes(roll.roll_no));
+    return allRolls.filter(
+      (roll) => !selectedStockRollIds.includes(String(roll.id))
+    );
   }, [allRollsPool, formData.items]);
 
   const handlePrint = async (type: "bill" | "challan") => {

@@ -253,6 +253,8 @@ const BillToBillPayment = () => {
           return sale.total ?? 0;
         case "cleared_amount":
           return sale.cleared_amount ?? 0;
+        case "remaining_amount":
+          return sale.remaining_amount ?? 0;
         case "new_cleared_amount":
           return sale.new_cleared_amount ?? 0;
         case "status":
@@ -586,7 +588,7 @@ const BillToBillPayment = () => {
                           />
                           <SortableHeader
                             label="To Be Cleared"
-                            sortKey="new_cleared_amount"
+                            sortKey="remaining_amount"
                             sort={salesSort}
                             onSort={toggleSalesSort}
                             align="right"
@@ -637,7 +639,7 @@ const BillToBillPayment = () => {
                                 {formatCurrency(sale.cleared_amount)}
                               </TableCell>
                               <TableCell className="text-right font-medium">
-                                {formatCurrency(sale.new_cleared_amount || 0)}
+                                {formatCurrency(sale.remaining_amount ?? 0)}
                               </TableCell>
                               <TableCell>{getStatusBadge(sale.status)}</TableCell>
                               <TableCell>

@@ -20,7 +20,7 @@ interface SalesItemRowProps {
   products: any[];
   handleItemChange: (index: number, field: string, value: any) => void;
   handleProductChange: (index: number, productId: string) => void;
-  handleRollChange: (index: number, rollNo: string) => void;
+  handleRollChange: (index: number, stockRollId: string) => void;
   removeItem: (index: number) => void;
   availableRolls: any[];
   defaultCustomRoll?: boolean;
@@ -138,6 +138,19 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
 
   const metersEditable = isCustomRoll || !item.roll_no;
 
+  const formatStockRollLabel = (roll: {
+    roll_no: string;
+    shade?: string;
+    meters: number;
+    unit?: string;
+    price: number;
+  }) =>
+    `${roll.roll_no}${roll.shade ? ` / ${roll.shade}` : ""} - ${roll.meters}${getUnitMeta(roll.unit).abbr} @ ₹${roll.price}`;
+
+  const selectedStockRollId = item.purchase_item_id
+    ? String(item.purchase_item_id)
+    : undefined;
+
   return (
     <tr>
       <td className="px-6 py-4 whitespace-nowrap">
@@ -200,7 +213,7 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
             </div>
           ) : (
             <Select
-              value={item.roll_no}
+              value={selectedStockRollId}
               onValueChange={(value) => handleRollChange(index, value)}
               disabled={!item.product_id}
             >
@@ -210,10 +223,8 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
               <SelectContent>
                 {availableRolls && availableRolls.length > 0 ? (
                   availableRolls.map((roll: any) => (
-                    <SelectItem key={roll.roll_no} value={roll.roll_no}>
-                      {roll.roll_no}
-                      {roll.shade ? ` / ${roll.shade}` : ""} - {roll.meters}
-                      {getUnitMeta(roll.unit).abbr} @ ₹{roll.price}
+                    <SelectItem key={roll.id} value={String(roll.id)}>
+                      {formatStockRollLabel(roll)}
                     </SelectItem>
                   ))
                 ) : (

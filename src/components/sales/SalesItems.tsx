@@ -11,7 +11,7 @@ interface SalesItemsProps {
     products: any[];
     handleItemChange: (index: number, field: string, value: any) => void;
     handleProductChange: (index: number, productId: string) => void;
-    handleRollChange: (index: number, rollNo: string) => void;
+    handleRollChange: (index: number, stockRollId: string) => void;
     addItem: () => void;
     removeItem: (index: number) => void;
     handleBulkAdd: (productId: string, count: number) => void;
