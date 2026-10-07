@@ -2,7 +2,12 @@ import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { billPaymentsAPI, customersAPI } from "@/services/api";
+import {
+  billPaymentsAPI,
+  customersAPI,
+  suppliersAPI,
+  supplierBillPaymentsAPI,
+} from "@/services/api";
 import { getRegularCustomers } from "@/lib/partyTypes";
 import {
   Select,
@@ -33,15 +38,16 @@ import {
 import { Check, AlertCircle, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-interface CustomerOption {
+interface PartyOption {
   id: string;
   name: string;
 }
 
-interface Sale {
+interface BillRow {
   id: string;
-  sales_no: string;
+  bill_no: string;
   date: string;
   total: number;
   credit_days?: number;
@@ -50,57 +56,85 @@ interface Sale {
   overdue_days?: number;
   due_date?: string;
   status: string;
+  is_bill_paid?: boolean;
+  payment_source?: string;
   new_cleared_amount?: number;
+  new_status?: string;
   can_settle?: boolean;
 }
 
-interface PaymentIn {
+interface PoolPayment {
   id: string;
-  received_amount: number;
+  amount: number;
   created_at: string;
   description: string | null;
 }
 
+type PartyType = "customer" | "supplier";
+
 const BillToBillPayment = () => {
   const { toast: toastNotification } = useToast();
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [partyType, setPartyType] = useState<PartyType>("customer");
+  const [parties, setParties] = useState<PartyOption[]>([]);
+  const [selectedPartyId, setSelectedPartyId] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [processingPayment, setProcessingPayment] = useState<boolean>(false);
   const [reconciliationData, setReconciliationData] = useState<any>(null);
-  const [calculatedStatus, setCalculatedStatus] = useState<any[]>([]);
+  const [calculatedStatus, setCalculatedStatus] = useState<BillRow[]>([]);
   const [showFullyPaid, setShowFullyPaid] = useState(false);
-  
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
 
-  const fetchCustomers = async () => {
+  useEffect(() => {
+    fetchParties();
+  }, [partyType]);
+
+  const fetchParties = async () => {
     try {
-      const response = await customersAPI.getAll();
-      const customerOptions = getRegularCustomers(response || []).map((customer: any) => ({
-        id: customer.id,
-        name: customer.name,
-      }));
-      setCustomers(customerOptions);
+      if (partyType === "customer") {
+        const response = await customersAPI.getAll();
+        setParties(
+          getRegularCustomers(response || []).map((customer: any) => ({
+            id: customer.id,
+            name: customer.name,
+          }))
+        );
+      } else {
+        const response = await suppliersAPI.getAll();
+        setParties(
+          (response || []).map((supplier: any) => ({
+            id: supplier.id,
+            name: supplier.name,
+          }))
+        );
+      }
     } catch (error) {
-      console.error("Error fetching customers:", error);
+      console.error("Error fetching parties:", error);
       toastNotification({
         title: "Error",
-        description: "Failed to load customers",
+        description: `Failed to load ${partyType === "customer" ? "customers" : "suppliers"}`,
         variant: "destructive",
       });
     }
   };
 
-  const fetchReconciliationData = async (customerId = selectedCustomerId) => {
-    if (!customerId) return;
-    
+  const handlePartyTypeChange = (value: string) => {
+    setPartyType(value as PartyType);
+    setSelectedPartyId("");
+    setReconciliationData(null);
+    setCalculatedStatus([]);
+  };
+
+  const fetchReconciliationData = async (partyId = selectedPartyId) => {
+    if (!partyId) return;
+
     setLoading(true);
     try {
-      const response = await billPaymentsAPI.getReconciliationData(customerId);
-      setReconciliationData(response.data);
-      calculatePaymentStatus(response.data);
+      const response =
+        partyType === "customer"
+          ? await billPaymentsAPI.getReconciliationData(partyId)
+          : await supplierBillPaymentsAPI.getReconciliationData(partyId);
+      const data = response.data;
+      setReconciliationData(data);
+      calculatePaymentStatus(data);
     } catch (error) {
       console.error("Error fetching reconciliation data:", error);
       toastNotification({
@@ -113,114 +147,125 @@ const BillToBillPayment = () => {
     }
   };
 
+  const normalizeBills = (data: any): BillRow[] => {
+    if (partyType === "customer") {
+      return (data.sales || []).map((sale: any) => ({
+        id: sale.id,
+        bill_no: sale.sales_no,
+        date: sale.date,
+        total: sale.total,
+        credit_days: sale.credit_days,
+        cleared_amount: sale.cleared_amount,
+        remaining_amount: sale.remaining_amount,
+        overdue_days: sale.overdue_days,
+        due_date: sale.due_date,
+        status: sale.status,
+        is_bill_paid: sale.is_bill_paid,
+        payment_source: sale.payment_source,
+      }));
+    }
+    return (data.purchases || []).map((purchase: any) => ({
+      id: purchase.id,
+      bill_no: purchase.purchase_no,
+      date: purchase.date,
+      total: purchase.total,
+      credit_days: purchase.credit_days,
+      cleared_amount: purchase.cleared_amount,
+      remaining_amount: purchase.remaining_amount,
+      overdue_days: purchase.overdue_days,
+      due_date: purchase.due_date,
+      status: purchase.status,
+      is_bill_paid: purchase.is_bill_paid,
+      payment_source: purchase.payment_source,
+    }));
+  };
+
+  const normalizePoolPayments = (data: any): PoolPayment[] => {
+    if (partyType === "customer") {
+      return (data.payments_in || []).map((payment: any) => ({
+        id: payment.id,
+        amount: Number(payment.received_amount || 0) + Number(payment.discount || 0),
+        created_at: payment.created_at,
+        description: payment.description,
+      }));
+    }
+    return (data.payments_out || []).map((payment: any) => ({
+      id: payment.id,
+      amount: Number(payment.amount || 0),
+      created_at: payment.created_at,
+      description: payment.description,
+    }));
+  };
+
   const calculatePaymentStatus = (data: any) => {
-    const { sales, total_payment_amount } = data;
-    let remainingAmount = total_payment_amount;
-    const calculatedSales = sales.map((sale: Sale) => {
-      // Calculate how much can be cleared for this sale
+    const bills = normalizeBills(data);
+    let remainingAmount = data.total_payment_amount;
+    const calculatedBills = bills.map((bill) => {
       let newClearedAmount = 0;
-      let newStatus = sale.status;
+      let newStatus = bill.status;
       let canSettle = false;
 
-      // If there's already a payment status, keep it as is
-      if (sale.status === "FULL") {
+      if (bill.status === "FULL" || bill.is_bill_paid) {
         return {
-          ...sale,
+          ...bill,
           new_cleared_amount: 0,
           new_status: "FULL",
-          can_settle: false
+          can_settle: false,
         };
       }
 
-      // Calculate how much can be paid for this invoice
       if (remainingAmount > 0) {
-        const amountNeeded = sale.total - sale.cleared_amount;
+        const amountNeeded = bill.total - bill.cleared_amount;
         newClearedAmount = Math.min(remainingAmount, amountNeeded);
         remainingAmount -= newClearedAmount;
-        
-        // Determine the new status
-        if (sale.cleared_amount + newClearedAmount >= sale.total) {
+
+        if (bill.cleared_amount + newClearedAmount >= bill.total) {
           newStatus = "FULL";
           canSettle = true;
         } else if (newClearedAmount > 0) {
           newStatus = "PARTIAL";
         } else {
-          newStatus = sale.status;
+          newStatus = bill.status;
         }
       }
 
       return {
-        ...sale,
+        ...bill,
         new_cleared_amount: newClearedAmount,
         new_status: newStatus,
-        can_settle: canSettle
+        can_settle: canSettle,
       };
     });
 
-    setCalculatedStatus(calculatedSales);
-  };
-
-  const handleProcessPayments = async () => {
-    if (!selectedCustomerId || !reconciliationData) return;
-    
-    setProcessingPayment(true);
-    try {
-      // Filter out sales where no new payment is being made
-      const salesWithPayments = calculatedStatus.filter(
-        (sale) => sale.new_cleared_amount && sale.new_cleared_amount > 0
-      );
-      
-      if (salesWithPayments.length === 0) {
-        toast.info("No new payments to process");
-        return;
-      }
-      
-      // Format data for API
-      const paymentData = {
-        customerId: selectedCustomerId,
-        overflow_amount: calculateOverflow(),
-        sales: salesWithPayments.map((sale) => ({
-          id: sale.id,
-          cleared_amount: sale.new_cleared_amount,
-          status: sale.new_status
-        }))
-      };
-      
-      // await billPaymentsAPI.processBillPayments(paymentData);
-      
-      toast.success("Payments processed successfully");
-      // Refresh the data
-      fetchReconciliationData();
-    } catch (error) {
-      console.error("Error processing payments:", error);
-      toast.error("Failed to process payments");
-    } finally {
-      setProcessingPayment(false);
-    }
+    setCalculatedStatus(calculatedBills);
   };
 
   const calculateOverflow = () => {
     if (!reconciliationData) return 0;
-    
-    // Calculate total new payments being made
     const totalNewPayments = calculatedStatus.reduce(
-      (total, sale) => total + (sale.new_cleared_amount || 0), 
+      (total, bill) => total + (bill.new_cleared_amount || 0),
       0
     );
-    
-    // Calculate overflow amount (if any)
     return Math.max(0, reconciliationData.total_payment_amount - totalNewPayments);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "FULL":
-        return <Badge className="bg-green-500">Fully Paid</Badge>;
-      case "PARTIAL":
-        return <Badge className="bg-orange-500">Partially Paid</Badge>;
-      default:
-        return <Badge className="bg-red-500">Unpaid</Badge>;
+  const getStatusBadge = (status: string, isBillPaid?: boolean) => {
+    if (isBillPaid || status === "FULL") {
+      return (
+        <div className="flex flex-col gap-1">
+          <Badge className="bg-green-500 w-fit">Fully Paid</Badge>
+          {isBillPaid && (
+            <Badge variant="outline" className="w-fit text-emerald-700 border-emerald-300">
+              Bill payment
+            </Badge>
+          )}
+        </div>
+      );
     }
+    if (status === "PARTIAL") {
+      return <Badge className="bg-orange-500">Partially Paid</Badge>;
+    }
+    return <Badge className="bg-red-500">Unpaid</Badge>;
   };
 
   const formatCurrency = (amount: number) => {
@@ -232,35 +277,35 @@ const BillToBillPayment = () => {
   };
 
   const fullyPaidCount = calculatedStatus.filter(
-    (sale) => sale.status === "FULL"
+    (bill) => bill.status === "FULL" || bill.is_bill_paid
   ).length;
-  const visibleSales = showFullyPaid
+  const visibleBills = showFullyPaid
     ? calculatedStatus
-    : calculatedStatus.filter((sale) => sale.status !== "FULL");
+    : calculatedStatus.filter((bill) => bill.status !== "FULL" && !bill.is_bill_paid);
 
-  const getSalesSortValue = useMemo(
-    () => (sale: any, key: string) => {
+  const getBillsSortValue = useMemo(
+    () => (bill: any, key: string) => {
       switch (key) {
-        case "sales_no":
-          return sale.sales_no;
+        case "bill_no":
+          return bill.bill_no;
         case "date":
-          return sale.date ? new Date(sale.date) : null;
+          return bill.date ? new Date(bill.date) : null;
         case "credit_days":
-          return sale.credit_days ?? 0;
+          return bill.credit_days ?? 0;
         case "overdue_days":
-          return sale.status === "FULL" ? -1 : sale.overdue_days ?? 0;
+          return bill.status === "FULL" || bill.is_bill_paid ? -1 : bill.overdue_days ?? 0;
         case "total":
-          return sale.total ?? 0;
+          return bill.total ?? 0;
         case "cleared_amount":
-          return sale.cleared_amount ?? 0;
+          return bill.cleared_amount ?? 0;
         case "remaining_amount":
-          return sale.remaining_amount ?? 0;
+          return bill.remaining_amount ?? 0;
         case "new_cleared_amount":
-          return sale.new_cleared_amount ?? 0;
+          return bill.new_cleared_amount ?? 0;
         case "status":
-          return sale.status;
+          return bill.status;
         case "new_status":
-          return sale.new_status;
+          return bill.new_status;
         default:
           return null;
       }
@@ -269,40 +314,60 @@ const BillToBillPayment = () => {
   );
 
   const {
-    sort: salesSort,
-    toggleSort: toggleSalesSort,
-    rows: sortedSales,
+    sort: billsSort,
+    toggleSort: toggleBillsSort,
+    rows: sortedBills,
   } = useTableControls({
-    data: visibleSales,
-    getSortValue: getSalesSortValue,
+    data: visibleBills,
+    getSortValue: getBillsSortValue,
   });
 
-  const handleSettleBill = async (saleId: string) => {
-    if (!selectedCustomerId || !reconciliationData) return;
-    
-    try {
-      const sale = calculatedStatus.find(s => s.id === saleId);
-      if (!sale) return;
+  const handleSettleBill = async (billId: string) => {
+    if (!selectedPartyId || !reconciliationData) return;
 
-      // Calculate the amount needed to settle this bill
-      const amountNeeded = sale.total - sale.cleared_amount;
-      
-      // Calculate total amount being settled (which is the amount needed for this bill)
+    try {
+      const bill = calculatedStatus.find((row) => row.id === billId);
+      if (!bill) return;
+
+      const amountNeeded = bill.total - bill.cleared_amount;
       const total_amount = amountNeeded;
-      
-      const paymentData = {
-        customerId: selectedCustomerId,
-        total_amount,
-        overflow_amount: Math.max(0, reconciliationData.total_payment_amount - total_amount),
-        description: `Settlement of bill ${sale.sales_no}`,
-        sales: [{
-          id: sale.id,
-          cleared_amount: amountNeeded,
-          status: "FULL"
-        }]
-      };
-      
-      await billPaymentsAPI.processPayments(paymentData);
+
+      if (partyType === "customer") {
+        await billPaymentsAPI.processPayments({
+          customerId: selectedPartyId,
+          total_amount,
+          overflow_amount: Math.max(
+            0,
+            reconciliationData.total_payment_amount - total_amount
+          ),
+          description: `Settlement of bill ${bill.bill_no}`,
+          sales: [
+            {
+              id: bill.id,
+              cleared_amount: amountNeeded,
+              status: "FULL",
+            },
+          ],
+        });
+      } else {
+        await supplierBillPaymentsAPI.processPayments({
+          supplierId: selectedPartyId,
+          total_amount,
+          overflow_amount: Math.max(
+            0,
+            reconciliationData.total_payment_amount - total_amount
+          ),
+          description: `Settlement of bill ${bill.bill_no}`,
+          purchases: [
+            {
+              id: bill.id,
+              cleared_amount: amountNeeded,
+              status: "FULL",
+            },
+          ],
+        });
+      }
+
       toast.success("Bill settled successfully");
       fetchReconciliationData();
     } catch (error) {
@@ -312,36 +377,57 @@ const BillToBillPayment = () => {
   };
 
   const handleSettleAll = async () => {
-    if (!selectedCustomerId || !reconciliationData) return;
-    
-    try {
-      // Calculate total amount being settled
-      const total_amount = calculatedStatus
-        .filter(sale => sale.new_cleared_amount && sale.new_cleared_amount > 0)
-        .reduce((total, sale) => total + sale.new_cleared_amount, 0);
+    if (!selectedPartyId || !reconciliationData) return;
 
-      const paymentData = {
-        customerId: selectedCustomerId,
-        total_amount,
-        overflow_amount: calculateOverflow(),
-        description: `Settlement of ${calculatedStatus.filter(sale => sale.new_cleared_amount && sale.new_cleared_amount > 0).length} bills`,
-        sales: calculatedStatus
-          .filter(sale => sale.new_cleared_amount && sale.new_cleared_amount > 0)
-          .map(sale => ({
-            id: sale.id,
-            cleared_amount: sale.new_cleared_amount,
-            status: sale.new_status
-          }))
-      };
-      
-      await billPaymentsAPI.processPayments(paymentData);
+    try {
+      setProcessingPayment(true);
+      const payable = calculatedStatus.filter(
+        (bill) => bill.new_cleared_amount && bill.new_cleared_amount > 0
+      );
+      const total_amount = payable.reduce(
+        (total, bill) => total + (bill.new_cleared_amount || 0),
+        0
+      );
+
+      if (partyType === "customer") {
+        await billPaymentsAPI.processPayments({
+          customerId: selectedPartyId,
+          total_amount,
+          overflow_amount: calculateOverflow(),
+          description: `Settlement of ${payable.length} bills`,
+          sales: payable.map((bill) => ({
+            id: bill.id,
+            cleared_amount: bill.new_cleared_amount,
+            status: bill.new_status,
+          })),
+        });
+      } else {
+        await supplierBillPaymentsAPI.processPayments({
+          supplierId: selectedPartyId,
+          total_amount,
+          overflow_amount: calculateOverflow(),
+          description: `Settlement of ${payable.length} bills`,
+          purchases: payable.map((bill) => ({
+            id: bill.id,
+            cleared_amount: bill.new_cleared_amount,
+            status: bill.new_status,
+          })),
+        });
+      }
+
       toast.success("All bills settled successfully");
       fetchReconciliationData();
     } catch (error) {
       console.error("Error settling bills:", error);
       toast.error("Failed to settle bills");
+    } finally {
+      setProcessingPayment(false);
     }
   };
+
+  const poolPayments = reconciliationData
+    ? normalizePoolPayments(reconciliationData)
+    : [];
 
   return (
     <DashboardLayout>
@@ -349,41 +435,59 @@ const BillToBillPayment = () => {
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Bill-to-Bill Payment</h1>
-            <p className="text-gray-600">Reconcile customer payments with sales invoices</p>
+            <p className="text-gray-600">
+              Reconcile {partyType === "customer" ? "customer payments with sales" : "supplier payments with purchases"}
+            </p>
           </div>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Select Customer</CardTitle>
+            <CardTitle>Select Party</CardTitle>
             <CardDescription>
-              Choose a customer to view their sales and payments
+              Choose customer or supplier reconciliation
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <Tabs value={partyType} onValueChange={handlePartyTypeChange}>
+              <TabsList className="grid w-full max-w-md grid-cols-2 h-11">
+                <TabsTrigger value="customer">Customers</TabsTrigger>
+                <TabsTrigger value="supplier">Suppliers</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Select
-                  value={selectedCustomerId}
+                  value={selectedPartyId}
                   onValueChange={(value) => {
-                    setSelectedCustomerId(value);
+                    setSelectedPartyId(value);
                     fetchReconciliationData(value);
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a customer" />
+                    <SelectValue
+                      placeholder={
+                        partyType === "customer"
+                          ? "Select a customer"
+                          : "Select a supplier"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name}
+                    {parties.map((party) => (
+                      <SelectItem key={party.id} value={party.id}>
+                        {party.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-center space-x-2">
-                <Button onClick={fetchReconciliationData} disabled={!selectedCustomerId || loading}>
+                <Button
+                  onClick={() => fetchReconciliationData()}
+                  disabled={!selectedPartyId || loading}
+                >
                   {loading ? (
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -408,7 +512,8 @@ const BillToBillPayment = () => {
                     {formatCurrency(reconciliationData.total_payment_amount)}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Includes {formatCurrency(reconciliationData.bill_overflow_amount)} overflow from previous reconciliation
+                    Includes {formatCurrency(reconciliationData.bill_overflow_amount)} overflow
+                    from previous reconciliation. Full-bill payments are excluded.
                   </p>
                 </CardContent>
               </Card>
@@ -417,13 +522,12 @@ const BillToBillPayment = () => {
                   <CardTitle className="text-lg">Payments Available</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">
-                    {reconciliationData.payments_in.length}
-                  </p>
+                  <p className="text-2xl font-bold">{poolPayments.length}</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Since {reconciliationData.last_clear_date ? 
-                      format(new Date(reconciliationData.last_clear_date), "dd MMM yyyy") : 
-                      "beginning"}
+                    Since{" "}
+                    {reconciliationData.last_clear_date
+                      ? format(new Date(reconciliationData.last_clear_date), "dd MMM yyyy")
+                      : "beginning"}
                   </p>
                 </CardContent>
               </Card>
@@ -432,9 +536,7 @@ const BillToBillPayment = () => {
                   <CardTitle className="text-lg">Overflow After Reconciliation</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">
-                    {formatCurrency(calculateOverflow())}
-                  </p>
+                  <p className="text-2xl font-bold">{formatCurrency(calculateOverflow())}</p>
                   <p className="text-xs text-gray-500 mt-1">
                     Amount that will be carried forward
                   </p>
@@ -447,7 +549,7 @@ const BillToBillPayment = () => {
                 <CardHeader>
                   <CardTitle>Payments Available</CardTitle>
                   <CardDescription>
-                    Payments received since last reconciliation
+                    Unallocated payments since last reconciliation (full-bill payments excluded)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -461,15 +563,15 @@ const BillToBillPayment = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {reconciliationData.payments_in.length > 0 ? (
-                          reconciliationData.payments_in.map((payment: PaymentIn) => (
+                        {poolPayments.length > 0 ? (
+                          poolPayments.map((payment) => (
                             <TableRow key={payment.id}>
                               <TableCell>
                                 {format(new Date(payment.created_at), "dd MMM yyyy")}
                               </TableCell>
                               <TableCell>{payment.description || "-"}</TableCell>
                               <TableCell className="text-right">
-                                {formatCurrency(payment.received_amount)}
+                                {formatCurrency(payment.amount)}
                               </TableCell>
                             </TableRow>
                           ))
@@ -498,9 +600,12 @@ const BillToBillPayment = () => {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle>Sales Reconciliation</CardTitle>
+                    <CardTitle>
+                      {partyType === "customer" ? "Sales" : "Purchase"} Reconciliation
+                    </CardTitle>
                     <CardDescription>
-                      Bill-to-bill payment reconciliation against sales invoices
+                      Bill-to-bill payment reconciliation against{" "}
+                      {partyType === "customer" ? "sales" : "purchase"} invoices
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-4">
@@ -511,13 +616,19 @@ const BillToBillPayment = () => {
                         size="sm"
                         onClick={() => setShowFullyPaid((prev) => !prev)}
                       >
-                        {showFullyPaid ? "Hide fully paid" : `Show fully paid (${fullyPaidCount})`}
+                        {showFullyPaid
+                          ? "Hide fully paid"
+                          : `Show fully paid (${fullyPaidCount})`}
                       </Button>
                     )}
-                    <Button 
+                    <Button
                       className="hidden"
-                      onClick={handleSettleAll} 
-                      disabled={processingPayment || !reconciliationData || reconciliationData.total_payment_amount <= 0}
+                      onClick={handleSettleAll}
+                      disabled={
+                        processingPayment ||
+                        !reconciliationData ||
+                        reconciliationData.total_payment_amount <= 0
+                      }
                     >
                       {processingPayment ? (
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -544,117 +655,121 @@ const BillToBillPayment = () => {
                           <TableHead>No.</TableHead>
                           <SortableHeader
                             label="Invoice No."
-                            sortKey="sales_no"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sortKey="bill_no"
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                           />
                           <SortableHeader
                             label="Date"
                             sortKey="date"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                           />
                           <SortableHeader
                             label="Credit Days"
                             sortKey="credit_days"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                             align="right"
                             className="text-right"
                           />
                           <SortableHeader
                             label="Overdue Days"
                             sortKey="overdue_days"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                             align="right"
                             className="text-right"
                           />
                           <SortableHeader
                             label="Total Amount"
                             sortKey="total"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                             align="right"
                             className="text-right"
                           />
                           <SortableHeader
                             label="Already Cleared"
                             sortKey="cleared_amount"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                             align="right"
                             className="text-right"
                           />
                           <SortableHeader
                             label="To Be Cleared"
                             sortKey="remaining_amount"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                             align="right"
                             className="text-right"
                           />
                           <SortableHeader
                             label="Current Status"
                             sortKey="status"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                           />
                           <SortableHeader
                             label="New Status"
                             sortKey="new_status"
-                            sort={salesSort}
-                            onSort={toggleSalesSort}
+                            sort={billsSort}
+                            onSort={toggleBillsSort}
                           />
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedSales.length > 0 ? (
-                          sortedSales.map((sale, index) => (
-                            <TableRow key={sale.id}>
+                        {sortedBills.length > 0 ? (
+                          sortedBills.map((bill, index) => (
+                            <TableRow key={bill.id}>
                               <TableCell>{index + 1}</TableCell>
-                              <TableCell>{sale.sales_no}</TableCell>
+                              <TableCell>{bill.bill_no}</TableCell>
                               <TableCell>
-                                {format(new Date(sale.date), "dd MMM yyyy")}
+                                {format(new Date(bill.date), "dd MMM yyyy")}
                               </TableCell>
                               <TableCell className="text-right">
-                                {sale.credit_days ?? 0}
+                                {bill.credit_days ?? 0}
                               </TableCell>
                               <TableCell className="text-right">
-                                {sale.status === "FULL" ? (
+                                {bill.status === "FULL" || bill.is_bill_paid ? (
                                   "—"
-                                ) : (sale.overdue_days || 0) > 0 ? (
+                                ) : (bill.overdue_days || 0) > 0 ? (
                                   <span className="text-red-600 font-medium">
-                                    {sale.overdue_days}
+                                    {bill.overdue_days}
                                   </span>
                                 ) : (
                                   0
                                 )}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatCurrency(sale.total)}
+                                {formatCurrency(bill.total)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatCurrency(sale.cleared_amount)}
+                                {formatCurrency(bill.cleared_amount)}
                               </TableCell>
                               <TableCell className="text-right font-medium">
-                                {formatCurrency(sale.remaining_amount ?? 0)}
+                                {formatCurrency(bill.remaining_amount ?? 0)}
                               </TableCell>
-                              <TableCell>{getStatusBadge(sale.status)}</TableCell>
                               <TableCell>
-                                {sale.new_status && sale.new_status !== sale.status ? (
-                                  getStatusBadge(sale.new_status)
+                                {getStatusBadge(bill.status, bill.is_bill_paid)}
+                              </TableCell>
+                              <TableCell>
+                                {bill.new_status &&
+                                bill.new_status !== bill.status &&
+                                !bill.is_bill_paid ? (
+                                  getStatusBadge(bill.new_status)
                                 ) : (
                                   <span>-</span>
                                 )}
                               </TableCell>
                               <TableCell>
-                                {sale.can_settle && (
+                                {bill.can_settle && (
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleSettleBill(sale.id)}
+                                    onClick={() => handleSettleBill(bill.id)}
                                     disabled={processingPayment}
                                   >
                                     Settle
@@ -668,7 +783,7 @@ const BillToBillPayment = () => {
                             <TableCell colSpan={11} className="text-center py-4">
                               {fullyPaidCount > 0
                                 ? "All bills are fully paid. Turn on Show fully paid to view them."
-                                : "No sales data available"}
+                                : "No bill data available"}
                             </TableCell>
                           </TableRow>
                         )}

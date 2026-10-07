@@ -38,10 +38,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { TableToolbar } from "@/components/ui/table-toolbar";
 import { CreditCard, Plus, Edit, Trash2 } from "lucide-react";
-import { paymentsInAPI, customersAPI } from "@/services/api";
+import { paymentsInAPI, customersAPI, salesAPI } from "@/services/api";
 import { getRegularCustomers, getWatavVendors } from "@/lib/partyTypes";
 import {
   normalizeSettlementStatus,
@@ -76,6 +77,8 @@ const paymentInSchema = z
     type: z.string().min(1, "Payment instrument is required"),
     description: z.string().optional().nullable(),
     payment_date: z.date(),
+    pay_full_bill: z.boolean().optional(),
+    sale_id: z.string().optional().nullable(),
   })
   .superRefine((data, ctx) => {
     if (data.payment_category === "NORMAL") {
@@ -102,6 +105,16 @@ const paymentInSchema = z
         });
       }
     }
+    const canPayBill =
+      data.payment_category === "NORMAL" ||
+      (data.payment_category === "VATAV" && data.entry_type === "CUSTOMER_PAYMENT");
+    if (data.pay_full_bill && canPayBill && !data.sale_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a bill to pay in full",
+        path: ["sale_id"],
+      });
+    }
   });
 
 type PaymentInFormValues = z.infer<typeof paymentInSchema>;
@@ -118,6 +131,8 @@ const defaultFormValues: PaymentInFormValues = {
   type: "",
   description: "",
   payment_date: new Date(),
+  pay_full_bill: false,
+  sale_id: "",
 };
 
 const PaymentsIn = () => {
@@ -342,6 +357,8 @@ const PaymentsIn = () => {
       type: payment.type,
       description: payment.description || "",
       payment_date: payment.payment_date ? new Date(payment.payment_date) : new Date(),
+      pay_full_bill: Boolean(payment.sale_id),
+      sale_id: payment.sale_id || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -397,13 +414,14 @@ const PaymentsIn = () => {
                   <SortableHeader label="Collection" sortKey="collection" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Instrument" sortKey="type" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Date" sortKey="payment_date" sort={sort} onSort={toggleSort} />
+                  <TableHead>Bill</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoadingPaymentsIn ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="h-24 text-center">
+                    <TableCell colSpan={13} className="h-24 text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
@@ -426,6 +444,9 @@ const PaymentsIn = () => {
                               <span className="text-xs text-muted-foreground">
                                 {isStandalone ? "Standalone" : "Customer payment"}
                               </span>
+                            )}
+                            {payment.sale_id && (
+                              <span className="text-xs text-emerald-700">Full bill</span>
                             )}
                           </div>
                         </TableCell>
@@ -479,6 +500,9 @@ const PaymentsIn = () => {
                             : "N/A"}
                         </TableCell>
                         <TableCell>
+                          {payment.sale?.sales_no || (payment.sale_id ? "Linked bill" : "—")}
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2">
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(payment)}>
                               <Edit className="h-4 w-4" />
@@ -501,7 +525,7 @@ const PaymentsIn = () => {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={12} className="h-24 text-center">
+                    <TableCell colSpan={13} className="h-24 text-center">
                       No payments found.
                     </TableCell>
                   </TableRow>
@@ -562,6 +586,7 @@ function inferCategory(payment: any) {
 function toApiPayload(data: PaymentInFormValues) {
   const isVatav = data.payment_category === "VATAV";
   const isStandalone = isVatav && data.entry_type === "STANDALONE";
+  const canPayBill = !isStandalone;
   return {
     payment_category: data.payment_category,
     entry_type: isVatav ? data.entry_type : null,
@@ -573,6 +598,7 @@ function toApiPayload(data: PaymentInFormValues) {
     type: data.type,
     description: data.description || "",
     payment_date: data.payment_date,
+    sale_id: canPayBill && data.pay_full_bill ? data.sale_id || null : null,
   };
 }
 
@@ -627,11 +653,49 @@ function PaymentFormDialog({
 }) {
   const category = form.watch("payment_category");
   const entryType = form.watch("entry_type");
+  const actualId = form.watch("actual_id");
+  const payFullBill = form.watch("pay_full_bill");
+  const saleId = form.watch("sale_id");
   const receivedAmount = Number(form.watch("received_amount")) || 0;
   const discountAmount = Number(form.watch("discount")) || 0;
   const isVatav = category === "VATAV";
   const isStandalone = isVatav && entryType === "STANDALONE";
+  const canPayBill = !isStandalone;
   const settlesCustomer = !isStandalone ? receivedAmount + discountAmount : 0;
+
+  const { data: customerSales = [], isLoading: isLoadingSales } = useQuery({
+    queryKey: ["payment-in-bills", actualId],
+    queryFn: async () => {
+      if (!actualId) return [];
+      const response = await salesAPI.getAll({ customer_id: actualId });
+      const sales = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response)
+          ? response
+          : [];
+      return sales.filter(
+        (sale: any) =>
+          sale.payment_status !== "FULL" || sale.id === saleId
+      );
+    },
+    enabled: open && canPayBill && Boolean(payFullBill) && Boolean(actualId),
+  });
+
+  useEffect(() => {
+    if (!canPayBill || !payFullBill) {
+      if (form.getValues("sale_id")) {
+        form.setValue("sale_id", "");
+      }
+      return;
+    }
+    if (!saleId) return;
+    const selected = customerSales.find((sale: any) => sale.id === saleId);
+    if (!selected) return;
+    const remaining = Number(selected.remaining_amount ?? selected.total) || 0;
+    const discount = Number(form.getValues("discount")) || 0;
+    const received = Math.max(0, remaining - discount);
+    form.setValue("received_amount", received);
+  }, [saleId, customerSales, canPayBill, payFullBill]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -652,7 +716,11 @@ function PaymentFormDialog({
                     <FormControl>
                       <Tabs
                         value={field.value}
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          form.setValue("pay_full_bill", false);
+                          form.setValue("sale_id", "");
+                        }}
                         className="w-full"
                       >
                         <TabsList className="grid w-full grid-cols-2 h-11">
@@ -784,7 +852,10 @@ function PaymentFormDialog({
                             Customer <span className="text-red-500">*</span>
                           </FormLabel>
                           <Select
-                            onValueChange={field.onChange}
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              form.setValue("sale_id", "");
+                            }}
                             value={field.value || undefined}
                             disabled={isLoadingCustomers}
                           >
@@ -811,6 +882,92 @@ function PaymentFormDialog({
                         </FormItem>
                       )}
                     />
+                  )}
+
+                  {canPayBill && (
+                    <div className="space-y-3 rounded-md border p-3">
+                      <FormField
+                        control={form.control}
+                        name="pay_full_bill"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={Boolean(field.value)}
+                                onCheckedChange={(checked) => {
+                                  field.onChange(Boolean(checked));
+                                  if (!checked) {
+                                    form.setValue("sale_id", "");
+                                  }
+                                }}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Pay full bill</FormLabel>
+                              <FormDescription>
+                                Links this payment to one invoice. That bill is marked paid in
+                                bill-to-bill and the amount is excluded from the settlement pool.
+                              </FormDescription>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+
+                      {payFullBill && (
+                        <FormField
+                          control={form.control}
+                          name="sale_id"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                Bill <span className="text-red-500">*</span>
+                              </FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value || undefined}
+                                disabled={!actualId || isLoadingSales}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue
+                                      placeholder={
+                                        !actualId
+                                          ? "Select a customer first"
+                                          : isLoadingSales
+                                            ? "Loading bills..."
+                                            : "Select unpaid bill"
+                                      }
+                                    />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {customerSales.length > 0 ? (
+                                    customerSales.map((sale: any) => (
+                                      <SelectItem key={sale.id} value={sale.id}>
+                                        {sale.sales_no} ·{" "}
+                                        {new Intl.NumberFormat("en-IN", {
+                                          style: "currency",
+                                          currency: "INR",
+                                          maximumFractionDigits: 0,
+                                        }).format(
+                                          Number(sale.remaining_amount ?? sale.total) || 0
+                                        )}{" "}
+                                        due
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <SelectItem value="no-bills" disabled>
+                                      No unpaid bills for this customer
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-4">

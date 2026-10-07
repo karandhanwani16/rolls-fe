@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -37,10 +38,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { TableToolbar } from "@/components/ui/table-toolbar";
 import { CreditCard, Plus, Edit, Trash2 } from "lucide-react";
-import { paymentsOutAPI, suppliersAPI } from "@/services/api";
+import { paymentsOutAPI, suppliersAPI, purchasesAPI } from "@/services/api";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -56,18 +58,42 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { useTableControls, uniqueOptions } from "@/hooks/useTableControls";
 
 // Form schema
-const paymentOutSchema = z.object({
-  supplier_id: z.string().min(1, "Supplier is required"),
-  amount: z.coerce.number().min(1, "Amount is required"),
-  description: z.string().optional().nullable(),
-  type: z.string().min(1, "Payment type is required"),
-  cheque_date: z.date().optional().nullable(),
-  payment_date: z.date({
-    required_error: "Payment date is required",
-  }),
-});
+const paymentOutSchema = z
+  .object({
+    supplier_id: z.string().min(1, "Supplier is required"),
+    amount: z.coerce.number().min(1, "Amount is required"),
+    description: z.string().optional().nullable(),
+    type: z.string().min(1, "Payment type is required"),
+    cheque_date: z.date().optional().nullable(),
+    payment_date: z.date({
+      required_error: "Payment date is required",
+    }),
+    pay_full_bill: z.boolean().optional(),
+    purchase_id: z.string().optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.pay_full_bill && !data.purchase_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a bill to pay in full",
+        path: ["purchase_id"],
+      });
+    }
+  });
 
 type PaymentOutFormValues = z.infer<typeof paymentOutSchema>;
+
+function toPaymentOutPayload(data: PaymentOutFormValues) {
+  return {
+    supplier_id: data.supplier_id,
+    amount: data.amount,
+    description: data.description || null,
+    type: data.type,
+    cheque_date: data.cheque_date,
+    payment_date: data.payment_date,
+    purchase_id: data.pay_full_bill ? data.purchase_id || null : null,
+  };
+}
 
 // Payment types
 const paymentTypes = [
@@ -105,7 +131,8 @@ const PaymentsOut = () => {
 
   // Mutations
   const addPaymentOutMutation = useMutation({
-    mutationFn: (data: PaymentOutFormValues) => paymentsOutAPI.create(data),
+    mutationFn: (data: PaymentOutFormValues) =>
+      paymentsOutAPI.create(toPaymentOutPayload(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['paymentsOut'] });
       toast({
@@ -113,12 +140,22 @@ const PaymentsOut = () => {
         description: "Payment out has been successfully added.",
       });
       setIsAddDialogOpen(false);
+      addForm.reset({
+        supplier_id: "",
+        amount: 0,
+        type: "",
+        description: "",
+        cheque_date: null,
+        payment_date: new Date(),
+        pay_full_bill: false,
+        purchase_id: "",
+      });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error adding payment out:", error);
       toast({
         title: "Error",
-        description: "Failed to add payment out.",
+        description: error?.response?.data?.error || "Failed to add payment out.",
         variant: "destructive",
       });
     },
@@ -126,7 +163,7 @@ const PaymentsOut = () => {
 
   const updatePaymentOutMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: PaymentOutFormValues }) =>
-      paymentsOutAPI.update(id, data),
+      paymentsOutAPI.update(id, toPaymentOutPayload(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['paymentsOut'] });
       toast({
@@ -135,11 +172,11 @@ const PaymentsOut = () => {
       });
       setIsEditDialogOpen(false);
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error updating payment out:", error);
       toast({
         title: "Error",
-        description: "Failed to update payment out.",
+        description: error?.response?.data?.error || "Failed to update payment out.",
         variant: "destructive",
       });
     },
@@ -174,6 +211,8 @@ const PaymentsOut = () => {
       description: "",
       cheque_date: null,
       payment_date: new Date(),
+      pay_full_bill: false,
+      purchase_id: "",
     },
   });
 
@@ -186,12 +225,76 @@ const PaymentsOut = () => {
       description: "",
       cheque_date: null,
       payment_date: new Date(),
+      pay_full_bill: false,
+      purchase_id: "",
     },
   });
 
   // Watch form values to show/hide cheque date field
   const addFormType = addForm.watch("type");
   const editFormType = editForm.watch("type");
+  const addSupplierId = addForm.watch("supplier_id");
+  const editSupplierId = editForm.watch("supplier_id");
+  const addPayFullBill = addForm.watch("pay_full_bill");
+  const editPayFullBill = editForm.watch("pay_full_bill");
+  const addPurchaseId = addForm.watch("purchase_id");
+  const editPurchaseId = editForm.watch("purchase_id");
+
+  const { data: addSupplierPurchases = [], isLoading: isLoadingAddPurchases } = useQuery({
+    queryKey: ["payment-out-bills", addSupplierId],
+    queryFn: async () => {
+      if (!addSupplierId) return [];
+      const response = await purchasesAPI.getAll({ supplier_id: addSupplierId });
+      const purchases = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response)
+          ? response
+          : [];
+      return purchases.filter(
+        (purchase: any) =>
+          purchase.payment_status !== "FULL" || purchase.id === addPurchaseId
+      );
+    },
+    enabled: isAddDialogOpen && Boolean(addPayFullBill) && Boolean(addSupplierId),
+  });
+
+  const { data: editSupplierPurchases = [], isLoading: isLoadingEditPurchases } = useQuery({
+    queryKey: ["payment-out-bills-edit", editSupplierId],
+    queryFn: async () => {
+      if (!editSupplierId) return [];
+      const response = await purchasesAPI.getAll({ supplier_id: editSupplierId });
+      const purchases = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response)
+          ? response
+          : [];
+      return purchases.filter(
+        (purchase: any) =>
+          purchase.payment_status !== "FULL" || purchase.id === editPurchaseId
+      );
+    },
+    enabled: isEditDialogOpen && Boolean(editPayFullBill) && Boolean(editSupplierId),
+  });
+
+  useEffect(() => {
+    if (!addPayFullBill || !addPurchaseId) return;
+    const selected = addSupplierPurchases.find((p: any) => p.id === addPurchaseId);
+    if (!selected) return;
+    addForm.setValue(
+      "amount",
+      Number(selected.remaining_amount ?? selected.total) || 0
+    );
+  }, [addPurchaseId, addSupplierPurchases, addPayFullBill]);
+
+  useEffect(() => {
+    if (!editPayFullBill || !editPurchaseId) return;
+    const selected = editSupplierPurchases.find((p: any) => p.id === editPurchaseId);
+    if (!selected) return;
+    editForm.setValue(
+      "amount",
+      Number(selected.remaining_amount ?? selected.total) || 0
+    );
+  }, [editPurchaseId, editSupplierPurchases, editPayFullBill]);
 
   const searchFns = useMemo(
     () => [
@@ -270,6 +373,8 @@ const PaymentsOut = () => {
       description: payment.description || "",
       cheque_date: payment.cheque_date ? new Date(payment.cheque_date) : null,
       payment_date: payment.payment_date ? new Date(payment.payment_date) : new Date(),
+      pay_full_bill: Boolean(payment.purchase_id),
+      purchase_id: payment.purchase_id || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -318,6 +423,7 @@ const PaymentsOut = () => {
                   <SortableHeader label="Payment Type" sortKey="type" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Payment Date" sortKey="payment_date" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Cheque Date" sortKey="cheque_date" sort={sort} onSort={toggleSort} />
+                  <TableHead>Bill</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -325,7 +431,7 @@ const PaymentsOut = () => {
               <TableBody>
                 {isLoadingPaymentsOut ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
@@ -344,6 +450,10 @@ const PaymentsOut = () => {
                         {payment.cheque_date
                           ? format(new Date(payment.cheque_date), 'dd/MM/yyyy')
                           : "N/A"}
+                      </TableCell>
+                      <TableCell>
+                        {payment.purchase?.purchase_no ||
+                          (payment.purchase_id ? "Linked bill" : "—")}
                       </TableCell>
                       <TableCell>{payment.description || "N/A"}</TableCell>
                       <TableCell>
@@ -372,7 +482,7 @@ const PaymentsOut = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       No payments found.
                     </TableCell>
                   </TableRow>
@@ -385,7 +495,7 @@ const PaymentsOut = () => {
 
       {/* Add Payment Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Payment Out</DialogTitle>
           </DialogHeader>
@@ -399,7 +509,13 @@ const PaymentsOut = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Supplier <span className="text-red-500">*</span></FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          addForm.setValue("purchase_id", "");
+                        }}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select a supplier" />
@@ -423,6 +539,84 @@ const PaymentsOut = () => {
                     </FormItem>
                   )}
                 />
+
+                <div className="space-y-3 rounded-md border p-3">
+                  <FormField
+                    control={addForm.control}
+                    name="pay_full_bill"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={Boolean(field.value)}
+                            onCheckedChange={(checked) => {
+                              field.onChange(Boolean(checked));
+                              if (!checked) addForm.setValue("purchase_id", "");
+                            }}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Pay full bill</FormLabel>
+                          <FormDescription>
+                            Links this payment to one purchase bill. That bill is marked paid in
+                            bill-to-bill and excluded from the settlement pool.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                  {addPayFullBill && (
+                    <FormField
+                      control={addForm.control}
+                      name="purchase_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Bill <span className="text-red-500">*</span>
+                          </FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value || undefined}
+                            disabled={!addSupplierId || isLoadingAddPurchases}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue
+                                  placeholder={
+                                    !addSupplierId
+                                      ? "Select a supplier first"
+                                      : isLoadingAddPurchases
+                                        ? "Loading bills..."
+                                        : "Select unpaid bill"
+                                  }
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {addSupplierPurchases.length > 0 ? (
+                                addSupplierPurchases.map((purchase: any) => (
+                                  <SelectItem key={purchase.id} value={purchase.id}>
+                                    {purchase.purchase_no} ·{" "}
+                                    {formatCurrency(
+                                      Number(purchase.remaining_amount ?? purchase.total) || 0
+                                    )}{" "}
+                                    due
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="no-bills" disabled>
+                                  No unpaid bills for this supplier
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
 
                 <FormField
                   control={addForm.control}
@@ -562,7 +756,7 @@ const PaymentsOut = () => {
 
       {/* Edit Payment Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Payment Out</DialogTitle>
           </DialogHeader>
@@ -578,7 +772,13 @@ const PaymentsOut = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Supplier <span className="text-red-500">*</span></FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          editForm.setValue("purchase_id", "");
+                        }}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select a supplier" />
@@ -602,6 +802,84 @@ const PaymentsOut = () => {
                     </FormItem>
                   )}
                 />
+
+                <div className="space-y-3 rounded-md border p-3">
+                  <FormField
+                    control={editForm.control}
+                    name="pay_full_bill"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={Boolean(field.value)}
+                            onCheckedChange={(checked) => {
+                              field.onChange(Boolean(checked));
+                              if (!checked) editForm.setValue("purchase_id", "");
+                            }}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Pay full bill</FormLabel>
+                          <FormDescription>
+                            Links this payment to one purchase bill. That bill is marked paid in
+                            bill-to-bill and excluded from the settlement pool.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                  {editPayFullBill && (
+                    <FormField
+                      control={editForm.control}
+                      name="purchase_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Bill <span className="text-red-500">*</span>
+                          </FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value || undefined}
+                            disabled={!editSupplierId || isLoadingEditPurchases}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue
+                                  placeholder={
+                                    !editSupplierId
+                                      ? "Select a supplier first"
+                                      : isLoadingEditPurchases
+                                        ? "Loading bills..."
+                                        : "Select unpaid bill"
+                                  }
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {editSupplierPurchases.length > 0 ? (
+                                editSupplierPurchases.map((purchase: any) => (
+                                  <SelectItem key={purchase.id} value={purchase.id}>
+                                    {purchase.purchase_no} ·{" "}
+                                    {formatCurrency(
+                                      Number(purchase.remaining_amount ?? purchase.total) || 0
+                                    )}{" "}
+                                    due
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="no-bills" disabled>
+                                  No unpaid bills for this supplier
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
 
                 <FormField
                   control={editForm.control}

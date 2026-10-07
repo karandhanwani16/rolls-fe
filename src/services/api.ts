@@ -459,6 +459,26 @@ export const billPaymentsAPI = {
   }
 };
 
+// Supplier Bill to Bill Payment API
+export const supplierBillPaymentsAPI = {
+  getSupplierPayments: async (supplierId: string) => {
+    const response = await api.get(`/supplier-bill-payments/supplier/${supplierId}`);
+    return response.data;
+  },
+  processPayments: async (data: any) => {
+    const response = await api.post('/supplier-bill-payments/process', data);
+    return response.data;
+  },
+  getReconciliationData: async (supplierId: string) => {
+    const response = await api.get(`/supplier-bill-payments/reconcile/${supplierId}`);
+    return response.data;
+  },
+  getSettlements: async (supplierId: string) => {
+    const response = await api.get(`/supplier-bill-payments/settlements/${supplierId}`);
+    return response.data;
+  },
+};
+
 export const productsAPI = {
   getAll: async () => {
     const response = await api.get('/products');
