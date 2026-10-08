@@ -148,8 +148,8 @@ const OutstandingReport = () => {
           return sale.total;
         case "outstanding":
           return sale.remaining_amount ?? sale.total;
-        case "overdue_days":
-          return sale.overdue_days ?? 0;
+        case "elapsed_days":
+          return sale.elapsed_days ?? 0;
         case "status":
           return sale.payment_status || "UNPAID";
         default:
@@ -162,7 +162,7 @@ const OutstandingReport = () => {
   const { sort, toggleSort, rows } = useTableControls({
     data: outstandingSales,
     getSortValue,
-    defaultSort: { key: "overdue_days", direction: "desc" },
+    defaultSort: { key: "elapsed_days", direction: "desc" },
   });
 
   const totalOutstanding = rows.reduce(
@@ -182,7 +182,7 @@ const OutstandingReport = () => {
       "Due Date",
       "Bill Total",
       "Outstanding",
-      "Overdue Days",
+      "Elapsed Days",
       "Status",
     ];
     const csvContent = [
@@ -198,7 +198,7 @@ const OutstandingReport = () => {
             : "",
           sale.total,
           sale.remaining_amount ?? sale.total,
-          sale.overdue_days || 0,
+          sale.elapsed_days || 0,
           `"${sale.payment_status || "UNPAID"}"`,
         ].join(",")
       ),
@@ -243,7 +243,7 @@ const OutstandingReport = () => {
         { header: "Date", width: 26, align: "center" },
         { header: "Credit Days", width: 24, align: "center" },
         { header: "Outstanding", width: 36, align: "right" },
-        { header: "Overdue", width: 22, align: "center" },
+        { header: "Elapsed", width: 22, align: "center" },
         { header: "Status", width: 28, align: "center" },
       ],
       rows: rows.map((sale) => [
@@ -252,7 +252,7 @@ const OutstandingReport = () => {
         formatPdfDate(sale.date),
         String(sale.credit_days || 0),
         formatPdfAmount(sale.remaining_amount ?? sale.total, { prefix: false }),
-        String(sale.overdue_days || 0),
+        String(sale.elapsed_days || 0),
         sale.payment_status || "UNPAID",
       ]),
       foot: ["", "", "", "Total", formatPdfAmount(totalOutstanding, { prefix: false }), "", ""],
@@ -269,7 +269,7 @@ const OutstandingReport = () => {
   return (
     <ReportLayout
       title="Outstanding Report"
-      description="Unpaid and partially paid bills with overdue days"
+      description="Unpaid and partially paid bills with days elapsed since sale date"
     >
       <div className="flex flex-col space-y-4">
         <div className="flex flex-wrap justify-between items-center gap-4">
@@ -475,8 +475,8 @@ const OutstandingReport = () => {
                       className={`text-right ${sortableHeadClass}`}
                     />
                     <SortableHeader
-                      label="Overdue Days"
-                      sortKey="overdue_days"
+                      label="Elapsed Days"
+                      sortKey="elapsed_days"
                       sort={sort}
                       onSort={toggleSort}
                       align="right"
@@ -513,13 +513,15 @@ const OutstandingReport = () => {
                             {formatAmount(sale.remaining_amount ?? sale.total)}
                           </TableCell>
                           <TableCell className="text-right">
-                            {(sale.overdue_days || 0) > 0 ? (
-                              <span className="text-red-600 font-medium">
-                                {sale.overdue_days}
-                              </span>
-                            ) : (
-                              0
-                            )}
+                            <span
+                              className={
+                                (sale.overdue_days || 0) > 0
+                                  ? "text-red-600 font-medium"
+                                  : "text-green-600 font-medium"
+                              }
+                            >
+                              {sale.elapsed_days ?? 0}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <Badge

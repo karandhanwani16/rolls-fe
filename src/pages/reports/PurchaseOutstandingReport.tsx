@@ -147,8 +147,8 @@ const PurchaseOutstandingReport = () => {
           return purchase.total;
         case "outstanding":
           return purchase.remaining_amount ?? purchase.total;
-        case "overdue_days":
-          return purchase.overdue_days ?? 0;
+        case "elapsed_days":
+          return purchase.elapsed_days ?? 0;
         case "status":
           return purchase.payment_status || "UNPAID";
         default:
@@ -161,7 +161,7 @@ const PurchaseOutstandingReport = () => {
   const { sort, toggleSort, rows } = useTableControls({
     data: outstandingPurchases,
     getSortValue,
-    defaultSort: { key: "overdue_days", direction: "desc" },
+    defaultSort: { key: "elapsed_days", direction: "desc" },
   });
 
   const totalOutstanding = rows.reduce(
@@ -181,7 +181,7 @@ const PurchaseOutstandingReport = () => {
       "Due Date",
       "Bill Total",
       "Outstanding",
-      "Overdue Days",
+      "Elapsed Days",
       "Status",
     ];
     const csvContent = [
@@ -197,7 +197,7 @@ const PurchaseOutstandingReport = () => {
             : "",
           purchase.total,
           purchase.remaining_amount ?? purchase.total,
-          purchase.overdue_days || 0,
+          purchase.elapsed_days || 0,
           `"${purchase.payment_status || "UNPAID"}"`,
         ].join(",")
       ),
@@ -242,7 +242,7 @@ const PurchaseOutstandingReport = () => {
         { header: "Date", width: 26, align: "center" },
         { header: "Credit Days", width: 24, align: "center" },
         { header: "Outstanding", width: 36, align: "right" },
-        { header: "Overdue", width: 22, align: "center" },
+        { header: "Elapsed", width: 22, align: "center" },
         { header: "Status", width: 28, align: "center" },
       ],
       rows: rows.map((purchase) => [
@@ -251,7 +251,7 @@ const PurchaseOutstandingReport = () => {
         formatPdfDate(purchase.date),
         String(purchase.credit_days || 0),
         formatPdfAmount(purchase.remaining_amount ?? purchase.total, { prefix: false }),
-        String(purchase.overdue_days || 0),
+        String(purchase.elapsed_days || 0),
         purchase.payment_status || "UNPAID",
       ]),
       foot: ["", "", "", "Total", formatPdfAmount(totalOutstanding, { prefix: false }), "", ""],
@@ -268,7 +268,7 @@ const PurchaseOutstandingReport = () => {
   return (
     <ReportLayout
       title="Purchase Outstanding Report"
-      description="Unpaid and partially paid purchase bills with overdue days. Payments out and returns are applied oldest bill first."
+      description="Unpaid and partially paid purchase bills with days elapsed since purchase date. Payments out and returns are applied oldest bill first."
     >
       <div className="flex flex-col space-y-4">
         <div className="flex flex-wrap justify-between items-center gap-4">
@@ -474,8 +474,8 @@ const PurchaseOutstandingReport = () => {
                       className={`text-right ${sortableHeadClass}`}
                     />
                     <SortableHeader
-                      label="Overdue Days"
-                      sortKey="overdue_days"
+                      label="Elapsed Days"
+                      sortKey="elapsed_days"
                       sort={sort}
                       onSort={toggleSort}
                       align="right"
@@ -512,13 +512,15 @@ const PurchaseOutstandingReport = () => {
                             {formatAmount(purchase.remaining_amount ?? purchase.total)}
                           </TableCell>
                           <TableCell className="text-right">
-                            {(purchase.overdue_days || 0) > 0 ? (
-                              <span className="text-red-600 font-medium">
-                                {purchase.overdue_days}
-                              </span>
-                            ) : (
-                              0
-                            )}
+                            <span
+                              className={
+                                (purchase.overdue_days || 0) > 0
+                                  ? "text-red-600 font-medium"
+                                  : "text-green-600 font-medium"
+                              }
+                            >
+                              {purchase.elapsed_days ?? 0}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <Badge
