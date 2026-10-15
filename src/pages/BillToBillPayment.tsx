@@ -429,6 +429,24 @@ const BillToBillPayment = () => {
     ? normalizePoolPayments(reconciliationData)
     : [];
 
+  const pendingAmount =
+    reconciliationData?.pending_amount ??
+    calculatedStatus.reduce(
+      (total, bill) => total + (Number(bill.remaining_amount) || 0),
+      0
+    );
+
+  const availableAmount = reconciliationData?.total_payment_amount ?? 0;
+
+  const pendingCardDescription =
+    partyType === "customer"
+      ? "Amount pending to receive from this customer on open bills"
+      : "Amount pending to pay this supplier on open bills";
+  const availableCardDescription =
+    partyType === "customer"
+      ? "Amount already received from the customer where bill-to-bill matching is not yet done"
+      : "Amount already paid to the supplier where bill-to-bill matching is not yet done";
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -502,44 +520,29 @@ const BillToBillPayment = () => {
 
         {reconciliationData && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Total Available Amount</CardTitle>
+                  <CardTitle className="text-lg">Pending Amount</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">
-                    {formatCurrency(reconciliationData.total_payment_amount)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Includes {formatCurrency(reconciliationData.bill_overflow_amount)} overflow
-                    from previous reconciliation. Full-bill payments are excluded.
-                  </p>
+                  <p className="text-2xl font-bold">{formatCurrency(pendingAmount)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{pendingCardDescription}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Payments Available</CardTitle>
+                  <CardTitle className="text-lg">Available Amount</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{poolPayments.length}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Since{" "}
-                    {reconciliationData.last_clear_date
-                      ? format(new Date(reconciliationData.last_clear_date), "dd MMM yyyy")
-                      : "beginning"}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Overflow After Reconciliation</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">{formatCurrency(calculateOverflow())}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Amount that will be carried forward
-                  </p>
+                  <p className="text-2xl font-bold">{formatCurrency(availableAmount)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{availableCardDescription}</p>
+                  {reconciliationData.bill_overflow_amount > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Includes {formatCurrency(reconciliationData.bill_overflow_amount)} carried
+                      forward from the last reconciliation
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </div>

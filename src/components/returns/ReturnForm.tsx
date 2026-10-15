@@ -48,6 +48,7 @@ const mapBillRolls = (
       product_id: item.product_id || "",
       product_name: item.product_name || "",
       roll_no: item.roll_no || "",
+      shade: saved?.shade || item.shade || "",
       roll_id: purchaseItemId,
       purchase_item_id: purchaseItemId,
       original_meters: Number(item.meters) || 0,
@@ -58,6 +59,19 @@ const mapBillRolls = (
       is_custom: false,
     };
   });
+};
+
+const parseBillList = (response: any) => {
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response)) return response;
+  return [];
+};
+
+const paymentStatusLabel = (bill: any) => {
+  const status = bill?.payment_status;
+  if (status === "FULL") return "Paid";
+  if (status === "PARTIAL") return "Partial";
+  return "Unpaid";
 };
 
 const extraCustomItems = (billItems: any[], savedItems: any[], isPurchase: boolean) => {
@@ -75,6 +89,7 @@ const extraCustomItems = (billItems: any[], savedItems: any[], isPurchase: boole
       product_id: item.product_id || "",
       product_name: item.product_name || "",
       roll_no: item.roll_no || "",
+      shade: item.shade || "",
       roll_id: null,
       purchase_item_id: null,
       original_meters: 0,
@@ -160,9 +175,10 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
     const number = isSales ? bill.sales_no : bill.purchase_no;
     const dateLabel = bill.date ? format(new Date(bill.date), "dd/MM/yyyy") : "";
     const totalLabel = Number(bill.total || 0).toLocaleString("en-IN");
+    const payLabel = paymentStatusLabel(bill);
     return {
       id: bill.id,
-      label: `${number} · ${dateLabel} · ₹${totalLabel}`,
+      label: `${number} · ${dateLabel} · ₹${totalLabel} · ${payLabel}`,
     };
   });
 
@@ -174,9 +190,9 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
     setBillsLoading(true);
     try {
       const response = isSales
-        ? await salesAPI.getAll({ customer_id: partyId })
-        : await purchasesAPI.getAll({ supplier_id: partyId });
-      const list = response.data || [];
+        ? await salesAPI.getAll({ customer_id: partyId, for_return: true })
+        : await purchasesAPI.getAll({ supplier_id: partyId, for_return: true });
+      const list = parseBillList(response);
       setBills(list);
       return list;
     } catch (error) {
@@ -209,14 +225,18 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
         const billId = isSales
           ? response.sale_id || response.sale?.id || ""
           : response.purchase_id || response.purchase?.id || "";
-        const list = await loadBills(partyId);
-        const bill =
+        let list = await loadBills(partyId);
+        let bill =
           list.find((row: any) => row.id === billId) ||
           (billId
             ? isSales
               ? await salesAPI.getById(billId)
               : await purchasesAPI.getById(billId)
             : null);
+        if (bill && billId && !list.some((row: any) => row.id === billId)) {
+          list = [bill, ...list];
+          setBills(list);
+        }
         const extras = extraCustomItems(bill?.items || [], response.items || [], !isSales);
         const items = bill
           ? applyBillItems(bill, response.items || [], extras)
@@ -392,6 +412,7 @@ const ReturnForm = ({ mode }: ReturnFormProps) => {
           product_id: "",
           product_name: "",
           roll_no: "",
+          shade: "",
           roll_id: null,
           purchase_item_id: null,
           original_meters: 0,
