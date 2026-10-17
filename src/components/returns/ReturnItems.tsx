@@ -120,9 +120,6 @@ const ReturnItems = ({
                     Roll No
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Shade
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Bill Qty
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -190,9 +187,6 @@ const ReturnItems = ({
                         ) : (
                           <span className="font-medium">{item.roll_no || "-"}</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {item.shade || "—"}
                       </td>
                       <td className="px-4 py-3 text-gray-500">
                         {isCustom

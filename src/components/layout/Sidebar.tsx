@@ -123,7 +123,6 @@ const navGroups: NavGroup[] = [
       { label: "Watav Report", to: "/reports/watav" },
       { label: "Sales Report", to: "/reports/sales" },
       { label: "Outstanding Report", to: "/reports/outstanding" },
-      { label: "Customer Pending Bills", to: "/reports/pending-bills" },
       { label: "Purchase Report", to: "/reports/purchases" },
       { label: "Purchase Outstanding", to: "/reports/purchase-outstanding" },
       { label: "Sales Return Report", to: "/reports/sales-returns" },

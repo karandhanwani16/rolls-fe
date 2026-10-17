@@ -169,34 +169,8 @@ export const dashboardAPI = {
 
 // Sales API
 export const salesAPI = {
-  getAll: async (params?: {
-    customer_id?: string;
-    for_return?: boolean;
-    outstanding_only?: boolean;
-  }) => {
-    const response = await api.get('/sales', {
-      params: {
-        customer_id: params?.customer_id,
-        for_return: params?.for_return ? '1' : undefined,
-        outstanding_only: params?.outstanding_only ? '1' : undefined,
-      },
-    });
-    return response.data;
-  },
-  getPendingBillsReport: async (params?: {
-    customerIds?: string[];
-    startDate?: string;
-    endDate?: string;
-  }) => {
-    const response = await api.get('/sales/pending-bills-report', {
-      params: {
-        customerIds: params?.customerIds?.length
-          ? params.customerIds.join(',')
-          : undefined,
-        startDate: params?.startDate,
-        endDate: params?.endDate,
-      },
-    });
+  getAll: async (params?: { customer_id?: string }) => {
+    const response = await api.get('/sales', { params });
     return response.data;
   },
   getById: async (id: string) => {
@@ -297,18 +271,8 @@ export const purchaseReturnsAPI = {
 
 // Purchases API
 export const purchasesAPI = {
-  getAll: async (params?: {
-    supplier_id?: string;
-    for_return?: boolean;
-    outstanding_only?: boolean;
-  }) => {
-    const response = await api.get('/purchases', {
-      params: {
-        supplier_id: params?.supplier_id,
-        for_return: params?.for_return ? '1' : undefined,
-        outstanding_only: params?.outstanding_only ? '1' : undefined,
-      },
-    });
+  getAll: async (params?: { supplier_id?: string }) => {
+    const response = await api.get('/purchases', { params });
     return response.data;
   },
   getById: async (id: string) => {

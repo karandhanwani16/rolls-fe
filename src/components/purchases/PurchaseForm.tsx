@@ -184,13 +184,13 @@ const PurchaseForm = () => {
       setFormData((prev) => ({
         ...prev,
         items: updatedItems,
-        total_amount: parseFloat((itemsTotal + transportCharges - discount).toFixed(2)),
+        total_amount: Math.round(itemsTotal + transportCharges - discount),
       }));
     } else {
       setFormData((prev) => ({
         ...prev,
-        total_amount: parseFloat(
-          ((prev.transport_charges || 0) - (prev.discount || 0)).toFixed(2)
+        total_amount: Math.round(
+          (prev.transport_charges || 0) - (prev.discount || 0)
         ),
       }));
     }
@@ -446,6 +446,7 @@ const PurchaseForm = () => {
 
         <PurchaseActions
           formData={formData}
+          setFormData={setFormData}
           isPending={purchaseMutation.isPending}
           id={id}
           navigate={navigate}

@@ -1,11 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Calendar, Truck, Warehouse, User, FileText, DollarSign, Clock } from 'lucide-react';
+import { Calendar, Truck, Warehouse, User, FileText } from 'lucide-react';
 import { useFormSectionNavigation } from '@/lib/formKeyboardNavigation';
 import QuantityUnitSelect from '@/components/ui/quantity-unit-select';
 import { DEFAULT_QUANTITY_UNIT } from '@/lib/quantityUnits';
@@ -109,45 +108,6 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="total_amount" className="text-sm font-medium">
-                            <span className="flex items-center gap-1">
-                                <DollarSign className="h-3.5 w-3.5 text-gray-500" />
-                                Total Amount
-                            </span>
-                        </Label>
-                        <CurrencyInput
-                            id="total_amount"
-                            value={formData?.total_amount}
-                            readOnly
-                            className="bg-gray-50 font-medium text-brand-teal"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="credit_days" className="text-sm font-medium">
-                            <span className="flex items-center gap-1">
-                                <Clock className="h-3.5 w-3.5 text-gray-500" />
-                                Credit Days
-                            </span>
-                        </Label>
-                        <Input
-                            id="credit_days"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={formData.credit_days ?? 0}
-                            onChange={(e) =>
-                                setFormData({
-                                    ...formData,
-                                    credit_days: parseInt(e.target.value, 10) || 0,
-                                })
-                            }
-                            placeholder="0"
-                            className="focus-visible:ring-brand-teal"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
                         <Label className="text-sm font-medium">Quantity Unit</Label>
                         <QuantityUnitSelect
                             value={formData.unit || DEFAULT_QUANTITY_UNIT}
@@ -162,8 +122,8 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
 
                 <Separator className="my-6" />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-                    <div className="space-y-2 md:col-span-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="space-y-2">
                         <Label htmlFor="godown_no" className="text-sm font-medium">
                             <span className="flex items-center gap-1">
                                 <Warehouse className="h-3.5 w-3.5 text-gray-500" />
@@ -190,7 +150,7 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                         </Select>
                     </div>
 
-                    <div className="space-y-2 md:col-span-1">
+                    <div className="space-y-2">
                         <Label htmlFor="transport" className="text-sm font-medium">
                             <span className="flex items-center gap-1">
                                 <Truck className="h-3.5 w-3.5 text-gray-500" />
@@ -208,67 +168,7 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                         />
                     </div>
 
-                    <div className="space-y-2 md:col-span-1">
-                        <Label htmlFor="transport_charges" className="text-sm font-medium">
-                            <span className="flex items-center gap-1">
-                                <DollarSign className="h-3.5 w-3.5 text-gray-500" />
-                                Transport Charges
-                            </span>
-                        </Label>
-                        <CurrencyInput
-                            id="transport_charges"
-                            value={formData.transport_charges ?? 0}
-                            onChange={(transport_charges) => {
-                                const itemsTotal = (formData.items || []).reduce(
-                                    (sum: number, item: any) =>
-                                        sum + (item.total_price || item.meters * item.price || 0),
-                                    0
-                                );
-                                const discount = formData.discount || 0;
-                                setFormData({
-                                    ...formData,
-                                    transport_charges,
-                                    total_amount: parseFloat(
-                                        (itemsTotal + transport_charges - discount).toFixed(2)
-                                    ),
-                                });
-                            }}
-                            placeholder="0.00"
-                            className="focus-visible:ring-brand-teal"
-                        />
-                    </div>
-
-                    <div className="space-y-2 md:col-span-1">
-                        <Label htmlFor="discount" className="text-sm font-medium">
-                            <span className="flex items-center gap-1">
-                                <DollarSign className="h-3.5 w-3.5 text-gray-500" />
-                                Discount
-                            </span>
-                        </Label>
-                        <CurrencyInput
-                            id="discount"
-                            value={formData.discount ?? 0}
-                            onChange={(discount) => {
-                                const itemsTotal = (formData.items || []).reduce(
-                                    (sum: number, item: any) =>
-                                        sum + (item.total_price || item.meters * item.price || 0),
-                                    0
-                                );
-                                const transport_charges = formData.transport_charges || 0;
-                                setFormData({
-                                    ...formData,
-                                    discount,
-                                    total_amount: parseFloat(
-                                        (itemsTotal + transport_charges - discount).toFixed(2)
-                                    ),
-                                });
-                            }}
-                            placeholder="0.00"
-                            className="focus-visible:ring-brand-teal"
-                        />
-                    </div>
-
-                    <div className="space-y-2 md:col-span-1">
+                    <div className="space-y-2">
                         <Label htmlFor="received_by" className="text-sm font-medium">
                             <span className="flex items-center gap-1">
                                 <User className="h-3.5 w-3.5 text-gray-500" />
@@ -286,7 +186,7 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
                         />
                     </div>
 
-                    <div className="space-y-2 md:col-span-2 lg:col-span-5">
+                    <div className="space-y-2 md:col-span-2 lg:col-span-4">
                         <Label htmlFor="description" className="text-sm font-medium">Description</Label>
                         <Textarea
                             id="description"
@@ -305,4 +205,4 @@ const PurchaseDetails = ({ formData, setFormData, suppliers, godowns }: Purchase
     );
 };
 
-export default PurchaseDetails; 
+export default PurchaseDetails;

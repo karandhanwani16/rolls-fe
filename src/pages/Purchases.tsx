@@ -7,8 +7,9 @@ import {
   Plus, 
   Edit, 
   Trash2, 
-  FileText, 
+  Eye, 
 } from "lucide-react";
+import { toast as sonnerToast } from "sonner";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -37,11 +38,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
 import { purchasesAPI } from "@/services/api";
 import { useTableControls } from "@/hooks/useTableControls";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { TableToolbar } from "@/components/ui/table-toolbar";
+
+const formatInr = (value: number, maxFractionDigits = 2) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: maxFractionDigits,
+  }).format(value || 0);
 
 type Purchase = {
   id: string;
@@ -68,6 +82,8 @@ const Purchases = () => {
   const navigate = useNavigate();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [purchaseToDelete, setPurchaseToDelete] = useState<string | null>(null);
+  const [selectedPurchase, setSelectedPurchase] = useState<any>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
   // Fetch purchases data
   const { 
@@ -196,6 +212,17 @@ const Purchases = () => {
   const handleDelete = (id: string) => {
     setPurchaseToDelete(id);
     setDeleteDialogOpen(true);
+  };
+
+  const handleViewPurchase = async (id: string) => {
+    try {
+      const purchase = await purchasesAPI.getById(id);
+      setSelectedPurchase(purchase);
+      setViewDialogOpen(true);
+    } catch (error) {
+      console.error("Error fetching purchase details:", error);
+      sonnerToast.error("Failed to fetch purchase details");
+    }
   };
 
   if (error) {
@@ -356,13 +383,15 @@ const Purchases = () => {
                             <Button
                               variant="outline"
                               size="icon"
-                              onClick={() => navigate(`/purchases/${purchase.id}`)}
+                              title="View"
+                              onClick={() => handleViewPurchase(purchase.id)}
                             >
-                              <FileText className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             </Button>
                             <Button
                               variant="outline"
                               size="icon"
+                              title="Edit"
                               onClick={() => navigate(`/purchases/edit/${purchase.id}`)}
                             >
                               <Edit className="h-4 w-4" />
@@ -370,6 +399,7 @@ const Purchases = () => {
                             <Button
                               variant="outline"
                               size="icon"
+                              title="Delete"
                               onClick={() => handleDelete(purchase.id)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -400,6 +430,193 @@ const Purchases = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* View Purchase Dialog */}
+        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 top-[5vh] translate-y-0 data-[state=open]:slide-in-from-top-[5%] data-[state=closed]:slide-out-to-top-[5%]">
+            <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0 pr-12">
+              <DialogTitle>
+                Purchase Details — {selectedPurchase?.purchase_no || ""}
+              </DialogTitle>
+            </DialogHeader>
+            {selectedPurchase && (
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Supplier</p>
+                    <p className="font-medium">{selectedPurchase.supplier_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Date</p>
+                    <p className="font-medium">
+                      {format(new Date(selectedPurchase.date), "dd MMM yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Unit</p>
+                    <p className="font-medium uppercase">
+                      {selectedPurchase.unit || selectedPurchase.items?.[0]?.unit || "m"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Transport</p>
+                    <p className="font-medium">
+                      {formatInr(selectedPurchase.transport_charges || 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Discount</p>
+                    <p className="font-medium">
+                      {formatInr(selectedPurchase.discount || 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Credit Days</p>
+                    <p className="font-medium">{selectedPurchase.credit_days ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Overdue Days</p>
+                    <p
+                      className={`font-medium ${
+                        (selectedPurchase.overdue_days || 0) > 0 ? "text-red-600" : ""
+                      }`}
+                    >
+                      {selectedPurchase.payment_status === "FULL"
+                        ? "—"
+                        : `${selectedPurchase.overdue_days || 0} days`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Outstanding</p>
+                    <p className="font-medium">
+                      {selectedPurchase.payment_status === "FULL"
+                        ? "Fully Paid"
+                        : formatInr(
+                            selectedPurchase.remaining_amount ?? selectedPurchase.total
+                          )}
+                    </p>
+                  </div>
+                  {selectedPurchase.godown && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Godown</p>
+                      <p className="font-medium">{selectedPurchase.godown}</p>
+                    </div>
+                  )}
+                  {selectedPurchase.received_by && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Received By</p>
+                      <p className="font-medium">{selectedPurchase.received_by}</p>
+                    </div>
+                  )}
+                  {selectedPurchase.description && (
+                    <div className="col-span-2 md:col-span-3">
+                      <p className="text-sm text-muted-foreground">Description</p>
+                      <p className="font-medium">{selectedPurchase.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="font-medium mb-2">Items</h3>
+                  <div className="border rounded-md overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead>Product</TableHead>
+                          <TableHead>Roll No</TableHead>
+                          <TableHead>Shade</TableHead>
+                          <TableHead>Width</TableHead>
+                          <TableHead className="text-right">Quantity</TableHead>
+                          <TableHead className="text-right">Rate</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedPurchase.items && selectedPurchase.items.length > 0 ? (
+                          selectedPurchase.items.map((item: any) => (
+                            <TableRow key={item.id || `${item.product_id}-${item.roll_no}`}>
+                              <TableCell className="font-medium">
+                                {item.product_name}
+                              </TableCell>
+                              <TableCell>{item.roll_no || "—"}</TableCell>
+                              <TableCell>{item.shade || "—"}</TableCell>
+                              <TableCell>{item.width || "—"}</TableCell>
+                              <TableCell className="text-right whitespace-nowrap">
+                                {(Number(item.meters) || 0).toFixed(2)}{" "}
+                                {item.unit || selectedPurchase.unit || "m"}
+                              </TableCell>
+                              <TableCell className="text-right whitespace-nowrap">
+                                ₹{(Number(item.price) || 0).toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right whitespace-nowrap">
+                                ₹
+                                {(
+                                  Number(item.total_price ?? item.total) || 0
+                                ).toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-4">
+                              No items found
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            )}
+            {selectedPurchase && (() => {
+              const grossTotal = (selectedPurchase.items || []).reduce(
+                (sum: number, item: any) =>
+                  sum + (Number(item.total_price ?? item.total) || 0),
+                0
+              );
+              const transportCharges = Number(selectedPurchase.transport_charges) || 0;
+              const discount = Number(selectedPurchase.discount) || 0;
+              const actualTotal = grossTotal + transportCharges - discount;
+              const roundOff = Number(
+                (Math.round(actualTotal) - actualTotal).toFixed(2)
+              );
+              const netTotal = Number(selectedPurchase.total) || Math.round(actualTotal);
+
+              return (
+                <div className="shrink-0 border-t px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-background">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 flex-1">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Gross Total</p>
+                      <p className="text-base font-semibold">{formatInr(grossTotal)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Discount</p>
+                      <p className="text-base font-semibold">{formatInr(discount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Round Off</p>
+                      <p className="text-base font-semibold">{formatInr(roundOff)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Net Total</p>
+                      <p className="text-xl font-bold">{formatInr(netTotal, 0)}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setViewDialogOpen(false);
+                      navigate(`/purchases/edit/${selectedPurchase.id}`);
+                    }}
+                  >
+                    <Edit className="mr-1 h-4 w-4" /> Edit Purchase
+                  </Button>
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

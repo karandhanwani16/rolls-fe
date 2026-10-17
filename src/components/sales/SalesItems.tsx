@@ -5,6 +5,8 @@ import SalesItemRow from './SalesItemRow';
 import BulkProductAdder from './BulkProductAdder';
 import { useTableInputNavigation } from '@/lib/formKeyboardNavigation';
 
+const ITEM_FIELDS = ['roll_no', 'shade', 'width', 'meters', 'price'];
+
 interface SalesItemsProps {
     formData: any;
     setFormData: (data: any) => void;
@@ -16,6 +18,7 @@ interface SalesItemsProps {
     removeItem: (index: number) => void;
     handleBulkAdd: (productId: string, count: number) => void;
     getAvailableRolls: (productId: string, index: number) => any[];
+    onWidthBlur?: () => void;
     title?: string;
     defaultCustomRoll?: boolean;
 }
@@ -31,11 +34,12 @@ const SalesItems = ({
     removeItem,
     handleBulkAdd,
     getAvailableRolls,
+    onWidthBlur,
     title = "Sale Items",
     defaultCustomRoll = false,
 }: SalesItemsProps) => {
     const { setRef, createKeyDownHandler } = useTableInputNavigation({
-        fields: ['roll_no', 'shade', 'width', 'meters', 'price'],
+        fields: ITEM_FIELDS,
         rowCount: formData.items.length,
         onAddRow: addItem,
     });
@@ -111,6 +115,7 @@ const SalesItems = ({
                                         defaultCustomRoll={defaultCustomRoll}
                                         setRef={setRef}
                                         createKeyDownHandler={createKeyDownHandler}
+                                        onWidthBlur={onWidthBlur}
                                     />
                                 ))}
                             </tbody>

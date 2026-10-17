@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -82,6 +82,14 @@ const SalesForm = () => {
     unit: DEFAULT_QUANTITY_UNIT,
     items: [],
   });
+  // Keep latest items for stable getAvailableRolls without depending on every field change
+  const itemsRef = useRef(formData.items);
+  itemsRef.current = formData.items;
+  // Debounce product-wide width sync so typing stays responsive
+  const widthSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingWidthSyncRef = useRef<{ index: number; productId: string } | null>(
+    null
+  );
 
   // Fetch customers data (exclude Watav vendors — managed separately)
   const { data: customers = [] } = useQuery({
@@ -345,13 +353,58 @@ const SalesForm = () => {
     }
   }, [formData.sales_date, id]);
 
-  // Fetch and store all rolls for a product
-  const fetchAndStoreRolls = async (productId: string) => {
-    if (!allRollsPool[productId]) {
+  // Fetch and store all rolls for a product; returns the rolls for immediate use
+  const fetchAndStoreRolls = useCallback(
+    async (productId: string) => {
+      if (allRollsPool[productId]) {
+        return allRollsPool[productId];
+      }
       const rolls = await purchasesAPI.getRollsByProductId(productId);
       setAllRollsPool((prev) => ({ ...prev, [productId]: rolls }));
+      return rolls;
+    },
+    [allRollsPool]
+  );
+
+  const syncWidthForProduct = useCallback((productId: string, width: string) => {
+    if (!productId) return;
+    setFormData((prev) => {
+      let anyChanged = false;
+      const newItems = prev.items.map((item) => {
+        if (item.product_id !== productId || item.width === width) return item;
+        anyChanged = true;
+        return { ...item, width };
+      });
+      // Width does not affect totals — avoid unnecessary recalculation
+      return anyChanged ? { ...prev, items: newItems } : prev;
+    });
+  }, []);
+
+  const flushWidthSync = useCallback(() => {
+    if (widthSyncTimerRef.current) {
+      clearTimeout(widthSyncTimerRef.current);
+      widthSyncTimerRef.current = null;
     }
-  };
+    const pending = pendingWidthSyncRef.current;
+    if (!pending) return;
+    pendingWidthSyncRef.current = null;
+    const item = itemsRef.current[pending.index];
+    if (!item || item.product_id !== pending.productId) return;
+    syncWidthForProduct(pending.productId, item.width || "");
+  }, [syncWidthForProduct]);
+
+  useEffect(() => {
+    return () => {
+      if (widthSyncTimerRef.current) {
+        clearTimeout(widthSyncTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Expose flush for width blur via stable ref on the change handler's companion
+  const handleWidthBlur = useCallback(() => {
+    flushWidthSync();
+  }, [flushWidthSync]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -359,104 +412,194 @@ const SalesForm = () => {
       toast.error("Please select a customer");
       return;
     }
-    saleMutation.mutate(formData);
-  };
 
-  const handleItemChange = (
-    index: number,
-    field: keyof SalesItem,
-    value: any
-  ) => {
-    setFormData((prevFormData) => {
-      const newItems = [...prevFormData.items];
+    // Apply any pending product-wide width sync before save (debounce may not have fired)
+    if (widthSyncTimerRef.current) {
+      clearTimeout(widthSyncTimerRef.current);
+      widthSyncTimerRef.current = null;
+    }
+    const pending = pendingWidthSyncRef.current;
+    pendingWidthSyncRef.current = null;
 
-      if (field === "price") {
-        // If price is being changed, update all items with the same product_id
-        const currentItem = newItems[index];
-        newItems.forEach((item, idx) => {
-          if (item.product_id === currentItem.product_id) {
-            newItems[idx] = {
-              ...item,
-              price: value,
-              total_price: parseFloat((item.meters * value).toFixed(2)),
-            };
-          }
-        });
-      } else {
-        // For other fields, just update the specific item
-        newItems[index] = {
-          ...newItems[index],
-          [field]: value,
-        };
-        
-        // If meters changed, recalculate total_price for this item only
-        if (field === "meters") {
-          newItems[index].total_price = parseFloat((value * newItems[index].price).toFixed(2));
-        }
+    let submitItems = itemsRef.current;
+    if (pending) {
+      const edited = submitItems[pending.index];
+      if (edited?.product_id === pending.productId) {
+        const width = edited.width || "";
+        submitItems = submitItems.map((item) =>
+          item.product_id === pending.productId && item.width !== width
+            ? { ...item, width }
+            : item
+        );
+        setFormData((prev) => ({ ...prev, items: submitItems }));
       }
+    }
 
-      // Calculate total amount including transport charges and discount
-      const itemsTotal = newItems.reduce(
-        (sum, item) => sum + (item.total_price || 0),
-        0
-      );
-      const totalAmount = Math.round(
-        itemsTotal + (prevFormData.transport_charges || 0) - (prevFormData.discount || 0)
-      );
-      
-      return {
-        ...prevFormData,
-        items: newItems,
-        total_amount: totalAmount,
-      };
+    saleMutation.mutate({
+      ...formData,
+      items: submitItems,
     });
   };
 
-  const handleProductChange = async (index: number, productId: string) => {
-    await fetchAndStoreRolls(productId);
-    const product = products.find((p) => p.id === productId);
-    if (product) {
-      setLoading(true);
-      try {
-        // Get available rolls from pool
-        const availableRolls = allRollsPool[productId] || [];
+  const handleItemChange = useCallback(
+    (index: number, field: keyof SalesItem, value: any) => {
+      if (field === "width") {
+        // Update the edited row immediately so the input stays responsive
+        setFormData((prev) => {
+          const currentItem = prev.items[index];
+          if (!currentItem || currentItem.width === value) return prev;
+          const newItems = [...prev.items];
+          newItems[index] = { ...currentItem, width: value };
+          return { ...prev, items: newItems };
+        });
 
-        // If editing, include the current roll in the list if it's not already there
-        // BUT only if it's a real stock roll (has purchase_item_id), not a custom roll
-        const currentItem = formData.items[index];
-        if (currentItem.roll_no && currentItem.purchase_item_id) {
-          const currentRoll = availableRolls.find(
-            (r: any) =>
-              String(r.id) ===
-              String(currentItem.purchase_item_id || currentItem.roll_id)
+        const productId = itemsRef.current[index]?.product_id;
+        if (!productId) return;
+
+        // Debounce syncing width to other rolls of the same product
+        pendingWidthSyncRef.current = { index, productId };
+        if (widthSyncTimerRef.current) {
+          clearTimeout(widthSyncTimerRef.current);
+        }
+        widthSyncTimerRef.current = setTimeout(() => {
+          widthSyncTimerRef.current = null;
+          const pending = pendingWidthSyncRef.current;
+          pendingWidthSyncRef.current = null;
+          if (!pending) return;
+          const item = itemsRef.current[pending.index];
+          if (!item || item.product_id !== pending.productId) return;
+          syncWidthForProduct(pending.productId, item.width || "");
+        }, 120);
+        return;
+      }
+
+      setFormData((prevFormData) => {
+        const currentItem = prevFormData.items[index];
+        if (!currentItem) return prevFormData;
+
+        if (field === "price") {
+          // Price is shared across all rolls of the same product
+          const productId = currentItem.product_id;
+          let anyChanged = false;
+          const newItems = prevFormData.items.map((item) => {
+            if (!productId || item.product_id !== productId) return item;
+            const total_price = parseFloat((item.meters * value).toFixed(2));
+            if (item.price === value && item.total_price === total_price) {
+              return item;
+            }
+            anyChanged = true;
+            return { ...item, price: value, total_price };
+          });
+          if (!anyChanged) return prevFormData;
+
+          const itemsTotal = newItems.reduce(
+            (sum, item) => sum + (item.total_price || 0),
+            0
           );
-          if (!currentRoll) {
-            availableRolls.push({
-              id: currentItem.roll_id,
-              roll_no: currentItem.roll_no,
-              meters: currentItem.meters,
-              price: currentItem.price,
-            });
-          }
+          return {
+            ...prevFormData,
+            items: newItems,
+            total_amount: Math.round(
+              itemsTotal +
+                (prevFormData.transport_charges || 0) -
+                (prevFormData.discount || 0)
+            ),
+          };
         }
 
-        const newItems = [...formData.items];
+        if ((currentItem as any)[field] === value) return prevFormData;
+
+        const newItems = [...prevFormData.items];
         newItems[index] = {
-          ...newItems[index],
-          product_id: product.id,
-          product_name: product.name,
-          rolls: availableRolls,
-          price: parseFloat(product.price.toFixed(2)),
-          width: currentItem.width || product.width || "",
-          roll_no: currentItem.roll_no || "",
-          roll_id: currentItem.roll_id || "",
-          meters: currentItem.meters || 0,
-          total_price: currentItem.total_price || 0,
+          ...currentItem,
+          [field]: value,
         };
 
-        setFormData({
-          ...formData,
+        if (field === "meters") {
+          newItems[index].total_price = parseFloat(
+            (value * newItems[index].price).toFixed(2)
+          );
+          const itemsTotal = newItems.reduce(
+            (sum, item) => sum + (item.total_price || 0),
+            0
+          );
+          return {
+            ...prevFormData,
+            items: newItems,
+            total_amount: Math.round(
+              itemsTotal +
+                (prevFormData.transport_charges || 0) -
+                (prevFormData.discount || 0)
+            ),
+          };
+        }
+
+        return {
+          ...prevFormData,
           items: newItems,
+        };
+      });
+    },
+    [syncWidthForProduct]
+  );
+
+  const handleProductChange = useCallback(
+    async (index: number, productId: string) => {
+      const product = products.find((p) => p.id === productId);
+      if (!product) return;
+
+      setLoading(true);
+      try {
+        const poolRolls = await fetchAndStoreRolls(productId);
+
+        setFormData((prev) => {
+          const currentItem = prev.items[index];
+          if (!currentItem) return prev;
+
+          // Include current stock roll without mutating the pool
+          let availableRolls = poolRolls || [];
+          if (currentItem.roll_no && currentItem.purchase_item_id) {
+            const hasCurrent = availableRolls.some(
+              (r: any) =>
+                String(r.id) ===
+                String(currentItem.purchase_item_id || currentItem.roll_id)
+            );
+            if (!hasCurrent) {
+              availableRolls = [
+                ...availableRolls,
+                {
+                  id: currentItem.roll_id,
+                  roll_no: currentItem.roll_no,
+                  meters: currentItem.meters,
+                  price: currentItem.price,
+                },
+              ];
+            }
+          }
+
+          const existingSameProduct = prev.items.find(
+            (item, idx) => idx !== index && item.product_id === productId
+          );
+
+          const newItems = [...prev.items];
+          newItems[index] = {
+            ...newItems[index],
+            product_id: product.id,
+            product_name: product.name,
+            rolls: availableRolls,
+            price: parseFloat(product.price.toFixed(2)),
+            width:
+              existingSameProduct?.width ||
+              currentItem.width ||
+              product.width ||
+              "",
+            roll_no: currentItem.roll_no || "",
+            roll_id: currentItem.roll_id || "",
+            meters: currentItem.meters || 0,
+            total_price: currentItem.total_price || 0,
+          };
+
+          return { ...prev, items: newItems };
         });
       } catch (error) {
         console.error("Error fetching rolls:", error);
@@ -464,53 +607,65 @@ const SalesForm = () => {
       } finally {
         setLoading(false);
       }
-    }
-  };
+    },
+    [products, fetchAndStoreRolls]
+  );
 
-  const handleRollChange = (index: number, stockRollId: string) => {
-    const item = formData.items[index];
-    const selectedRoll = allRollsPool[item.product_id]?.find(
-      (r) => String(r.id) === String(stockRollId)
-    );
+  const handleRollChange = useCallback(
+    (index: number, stockRollId: string) => {
+      setFormData((prev) => {
+        const item = prev.items[index];
+        if (!item) return prev;
+        const selectedRoll = allRollsPool[item.product_id]?.find(
+          (r) => String(r.id) === String(stockRollId)
+        );
+        if (!selectedRoll) return prev;
 
-    if (selectedRoll) {
-      const newItems = [...formData.items];
+        const newItems = [...prev.items];
 
-      // Update the current item with selected roll details
-      newItems[index] = {
-        ...newItems[index],
-        roll_no: selectedRoll.roll_no,
-        roll_id: selectedRoll.id,
-        purchase_item_id: selectedRoll.id,
-        shade: selectedRoll.shade || "",
-        width: selectedRoll.width || newItems[index].width || "",
-        meters: selectedRoll.meters,
-        unit: formData.unit || DEFAULT_QUANTITY_UNIT,
-        price: selectedRoll.price,
-        total_price: parseFloat(
-          (selectedRoll.meters * selectedRoll.price).toFixed(2)
-        ),
-      };
+        // Prefer width already set on another roll of the same product in this sale
+        const siblingWidth = newItems.find(
+          (it, i) =>
+            i !== index && it.product_id === item.product_id && it.width
+        )?.width;
 
-      const itemsTotal = newItems.reduce(
-        (sum, item) => sum + (item.total_price || 0),
-        0
-      );
-      setFormData({
-        ...formData,
-        items: newItems,
-        total_amount: Math.round(
-          itemsTotal + (formData.transport_charges || 0) - (formData.discount || 0)
-        ),
+        newItems[index] = {
+          ...newItems[index],
+          roll_no: selectedRoll.roll_no,
+          roll_id: selectedRoll.id,
+          purchase_item_id: selectedRoll.id,
+          shade: selectedRoll.shade || "",
+          width:
+            siblingWidth || selectedRoll.width || newItems[index].width || "",
+          meters: selectedRoll.meters,
+          unit: prev.unit || DEFAULT_QUANTITY_UNIT,
+          price: selectedRoll.price,
+          total_price: parseFloat(
+            (selectedRoll.meters * selectedRoll.price).toFixed(2)
+          ),
+        };
+
+        const itemsTotal = newItems.reduce(
+          (sum, row) => sum + (row.total_price || 0),
+          0
+        );
+        return {
+          ...prev,
+          items: newItems,
+          total_amount: Math.round(
+            itemsTotal + (prev.transport_charges || 0) - (prev.discount || 0)
+          ),
+        };
       });
-    }
-  };
+    },
+    [allRollsPool]
+  );
 
-  const addItem = () => {
-    setFormData({
-      ...formData,
+  const addItem = useCallback(() => {
+    setFormData((prev) => ({
+      ...prev,
       items: [
-        ...formData.items,
+        ...prev.items,
         {
           sales_item_id: "",
           sales_id: id || "",
@@ -522,77 +677,89 @@ const SalesForm = () => {
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
-          unit: formData.unit || DEFAULT_QUANTITY_UNIT,
+          unit: prev.unit || DEFAULT_QUANTITY_UNIT,
           price: 0,
           total_price: 0,
           created_at: "",
           updated_at: "",
         },
       ],
-    });
-  };
+    }));
+  }, [id]);
 
-  const removeItem = (index: number) => {
-    const itemToRemove = formData.items[index];
-    const newItems = [...formData.items];
-    newItems.splice(index, 1);
+  const removeItem = useCallback((index: number) => {
+    setFormData((prev) => {
+      const itemToRemove = prev.items[index];
+      if (!itemToRemove) return prev;
+      const newItems = [...prev.items];
+      newItems.splice(index, 1);
 
-    // If the removed item had a STOCK roll selected (has purchase_item_id), add it back to the pool
-    // Don't add custom rolls back to the pool
-    if (itemToRemove.roll_no && itemToRemove.product_id && itemToRemove.purchase_item_id) {
-      const rollToAddBack = {
-        id: itemToRemove.roll_id,
-        roll_no: itemToRemove.roll_no,
-        meters: itemToRemove.meters,
-        unit: itemToRemove.unit || DEFAULT_QUANTITY_UNIT,
-        price: itemToRemove.price,
-      };
+      // If the removed item had a STOCK roll selected (has purchase_item_id), add it back to the pool
+      // Don't add custom rolls back to the pool
+      if (
+        itemToRemove.roll_no &&
+        itemToRemove.product_id &&
+        itemToRemove.purchase_item_id
+      ) {
+        const rollToAddBack = {
+          id: itemToRemove.roll_id,
+          roll_no: itemToRemove.roll_no,
+          meters: itemToRemove.meters,
+          unit: itemToRemove.unit || DEFAULT_QUANTITY_UNIT,
+          price: itemToRemove.price,
+        };
 
-      setAllRollsPool((prev) => ({
+        setAllRollsPool((poolPrev) => ({
+          ...poolPrev,
+          [itemToRemove.product_id]: [
+            ...(poolPrev[itemToRemove.product_id] || []),
+            rollToAddBack,
+          ],
+        }));
+
+        newItems.forEach((item, idx) => {
+          if (item.product_id === itemToRemove.product_id) {
+            newItems[idx] = {
+              ...item,
+              rolls: [
+                ...(allRollsPool[item.product_id] || []),
+                rollToAddBack,
+              ],
+            };
+          }
+        });
+      }
+
+      const itemsTotal = newItems.reduce(
+        (sum, item) => sum + (item.total_price || 0),
+        0
+      );
+      return {
         ...prev,
-        [itemToRemove.product_id]: [
-          ...(prev[itemToRemove.product_id] || []),
-          rollToAddBack,
-        ],
-      }));
-
-      // Update available rolls for remaining items with the same product
-      newItems.forEach((item, idx) => {
-        if (item.product_id === itemToRemove.product_id) {
-          newItems[idx] = {
-            ...item,
-            rolls: [...(allRollsPool[item.product_id] || []), rollToAddBack],
-          };
-        }
-      });
-    }
-
-    const itemsTotal = newItems.reduce(
-      (sum, item) => sum + (item.total_price || 0),
-      0
-    );
-    setFormData({
-      ...formData,
-      items: newItems,
-      total_amount: Math.round(
-        itemsTotal + (formData.transport_charges || 0) - (formData.discount || 0)
-      ),
+        items: newItems,
+        total_amount: Math.round(
+          itemsTotal + (prev.transport_charges || 0) - (prev.discount || 0)
+        ),
+      };
     });
-  };
+  }, [allRollsPool]);
 
   const handleBulkAdd = async (productId: string, count: number) => {
-    await fetchAndStoreRolls(productId);
     const product = products.find((p: any) => p.id === productId);
-
     if (!product) return;
 
     setLoading(true);
 
     try {
-      // Get available rolls from pool
-      const availableRolls = allRollsPool[productId] || [];
+      const availableRolls = await fetchAndStoreRolls(productId);
 
-      // Create new items with available rolls from pool
+      // Inherit width from an existing line of the same product when present
+      const existingWidth =
+        itemsRef.current.find((item) => item.product_id === product.id)
+          ?.width ||
+        product.width ||
+        "";
+
       const newItems = Array(count)
         .fill(null)
         .map(() => ({
@@ -602,7 +769,7 @@ const SalesForm = () => {
           product_name: product.name,
           roll_no: "",
           shade: "",
-          width: product.width || "",
+          width: existingWidth,
           roll_id: "",
           purchase_item_id: null, // Changed to null for custom rolls
           meters: 0,
@@ -611,7 +778,7 @@ const SalesForm = () => {
           total_price: 0,
           created_at: "",
           updated_at: "",
-          rolls: availableRolls, // Use rolls from pool
+          rolls: availableRolls,
         }));
 
       setFormData((prev: any) => ({
@@ -628,43 +795,77 @@ const SalesForm = () => {
     }
   };
 
-  // Compute available rolls for a row
-  const getAvailableRolls = useCallback((productId: string, currentIndex: number) => {
-    if (!productId) return [];
+  // Only roll-selection fields — width/price/shade edits must not invalidate this
+  const rollSelectionKey = formData.items
+    .map(
+      (item) =>
+        `${item.product_id}:${item.purchase_item_id || ""}:${item.roll_id || ""}:${item.roll_no || ""}`
+    )
+    .join("|");
 
-    const allRolls = allRollsPool[productId] || [];
-    const selectedStockRollIds = formData.items
-      .filter(
-        (item, idx) =>
-          idx !== currentIndex &&
-          item.product_id === productId &&
-          (item.purchase_item_id || item.roll_id)
-      )
-      .map((item) => String(item.purchase_item_id || item.roll_id));
+  const availableRollsCacheRef = useRef<{
+    key: string;
+    byRow: Map<string, any[]>;
+  }>({ key: "", byRow: new Map() });
 
-    // If we're editing and the current item has a roll_no, make sure it's included
-    // BUT only if it's a real stock roll (has purchase_item_id), not a custom roll
-    const currentItem = formData.items[currentIndex];
-    if (currentItem?.roll_no && currentItem?.purchase_item_id) {
-      const currentRoll = allRolls.find(
-        (r) =>
-          String(r.id) ===
-          String(currentItem.purchase_item_id || currentItem.roll_id)
-      );
-      if (!currentRoll) {
-        allRolls.push({
-          id: currentItem.roll_id,
-          roll_no: currentItem.roll_no,
-          meters: currentItem.meters,
-          price: currentItem.price,
-        });
+  // Compute available rolls for a row (stable across width/price keystrokes)
+  const getAvailableRolls = useCallback(
+    (productId: string, currentIndex: number) => {
+      if (!productId) return [];
+
+      const poolKey = Object.keys(allRollsPool).join(",");
+      const cacheKey = `${rollSelectionKey}::${poolKey}`;
+      if (availableRollsCacheRef.current.key !== cacheKey) {
+        availableRollsCacheRef.current = { key: cacheKey, byRow: new Map() };
       }
-    }
 
-    return allRolls.filter(
-      (roll) => !selectedStockRollIds.includes(String(roll.id))
-    );
-  }, [allRollsPool, formData.items]);
+      const rowKey = `${currentIndex}:${productId}`;
+      const cached = availableRollsCacheRef.current.byRow.get(rowKey);
+      if (cached) return cached;
+
+      const items = itemsRef.current;
+      const allRolls = allRollsPool[productId] || [];
+      const selectedStockRollIds = new Set(
+        items
+          .filter(
+            (item, idx) =>
+              idx !== currentIndex &&
+              item.product_id === productId &&
+              (item.purchase_item_id || item.roll_id)
+          )
+          .map((item) => String(item.purchase_item_id || item.roll_id))
+      );
+
+      // If editing and the current item has a stock roll, include it without mutating the pool
+      let rolls = allRolls;
+      const currentItem = items[currentIndex];
+      if (currentItem?.roll_no && currentItem?.purchase_item_id) {
+        const hasCurrent = allRolls.some(
+          (r) =>
+            String(r.id) ===
+            String(currentItem.purchase_item_id || currentItem.roll_id)
+        );
+        if (!hasCurrent) {
+          rolls = [
+            ...allRolls,
+            {
+              id: currentItem.roll_id,
+              roll_no: currentItem.roll_no,
+              meters: currentItem.meters,
+              price: currentItem.price,
+            },
+          ];
+        }
+      }
+
+      const result = rolls.filter(
+        (roll) => !selectedStockRollIds.has(String(roll.id))
+      );
+      availableRollsCacheRef.current.byRow.set(rowKey, result);
+      return result;
+    },
+    [allRollsPool, rollSelectionKey]
+  );
 
   const handlePrint = async (type: "bill" | "challan") => {
     if (!id) return;
@@ -759,6 +960,7 @@ const SalesForm = () => {
           removeItem={removeItem}
           handleBulkAdd={handleBulkAdd}
           getAvailableRolls={getAvailableRolls}
+          onWidthBlur={handleWidthBlur}
         />
 
         <SalesActions formData={formData} setFormData={setFormData} />

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { X, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import QuantityUnitSelect from '@/components/ui/quantity-unit-select';
 import { DEFAULT_QUANTITY_UNIT, getUnitMeta } from '@/lib/quantityUnits';
 
 interface SalesItemRowProps {
@@ -29,6 +28,7 @@ interface SalesItemRowProps {
     index: number,
     field: string
   ) => (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onWidthBlur?: () => void;
 }
 
 const SalesItemRow: React.FC<SalesItemRowProps> = ({
@@ -43,6 +43,7 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
   defaultCustomRoll = false,
   setRef,
   createKeyDownHandler,
+  onWidthBlur,
 }) => {
   const [isCustomRoll, setIsCustomRoll] = useState(() => {
     const isNewItem = !item.roll_no && !item.purchase_item_id;
@@ -60,49 +61,50 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
     return hasNoPurchaseItemId || rollNotInAvailable;
   });
 
-  // Auto-detect if this should be custom mode when availableRolls change
+  // Stable key so width/price edits (new availableRolls array identity) don't re-run this
+  const availableRollIdsKey = availableRolls.map((roll) => roll.id).join(",");
+
+  // Auto-detect if this should be custom mode when available rolls change
   // But only for existing items, not new ones
   useEffect(() => {
-    // Use the same logic as in useState
     const isNewItem = !item.roll_no && !item.purchase_item_id;
-    
-    console.log('🔄 useEffect triggered:', {
-      isNewItem,
-      currentIsCustomRoll: isCustomRoll,
-      sales_item_id: item.sales_item_id,
-      roll_no: item.roll_no,
-      purchase_item_id: item.purchase_item_id
-    });
-    
+
     // Don't auto-switch for new items - let user manually toggle
     if (isNewItem) {
-      console.log('⏸️ Skipping auto-switch for new item');
       return;
     }
-    
-    const hasNoPurchaseItemId = item.purchase_item_id === null || item.purchase_item_id === undefined || item.purchase_item_id === '';
-    const rollNotInAvailable = item.roll_no && !availableRolls.some(roll => roll.roll_no === item.roll_no);
-    
-    console.log('🔍 useEffect detection:', {
-      hasNoPurchaseItemId,
-      rollNotInAvailable,
-      shouldBeCustom: hasNoPurchaseItemId || rollNotInAvailable,
-      currentIsCustomRoll: isCustomRoll
-    });
-    
+
+    const hasNoPurchaseItemId =
+      item.purchase_item_id === null ||
+      item.purchase_item_id === undefined ||
+      item.purchase_item_id === "";
+    const rollNotInAvailable =
+      item.roll_no &&
+      !availableRolls.some((roll) => roll.roll_no === item.roll_no);
+
     // Set to custom mode if:
     // 1. It's a custom roll (no purchase_item_id), OR
     // 2. It has a roll_no but that roll is not available in dropdown
     if ((hasNoPurchaseItemId || rollNotInAvailable) && !isCustomRoll) {
-      console.log('✅ Setting to custom mode');
       setIsCustomRoll(true);
     }
     // If it's a stock roll that IS available in dropdown, switch back to dropdown mode
-    else if (!hasNoPurchaseItemId && item.roll_no && availableRolls.some(roll => roll.roll_no === item.roll_no) && isCustomRoll) {
-      console.log('🔄 Setting to dropdown mode');
+    else if (
+      !hasNoPurchaseItemId &&
+      item.roll_no &&
+      availableRolls.some((roll) => roll.roll_no === item.roll_no) &&
+      isCustomRoll
+    ) {
       setIsCustomRoll(false);
     }
-  }, [availableRolls, item.purchase_item_id, item.roll_no, item.sales_item_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- availableRollIdsKey tracks roll list identity
+  }, [
+    availableRollIdsKey,
+    item.purchase_item_id,
+    item.roll_no,
+    item.sales_item_id,
+    isCustomRoll,
+  ]);
 
   const handleToggleCustomRoll = () => {
     const newIsCustom = !isCustomRoll;
@@ -253,6 +255,7 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
           ref={setRef('width', index)}
           value={item.width || ''}
           onChange={(e) => handleItemChange(index, 'width', e.target.value)}
+          onBlur={onWidthBlur}
           onKeyDown={(e) => handleKeyDown(e, 'width')}
           placeholder="Width"
           className="min-w-[80px]"
@@ -310,4 +313,4 @@ const SalesItemRow: React.FC<SalesItemRowProps> = ({
   );
 };
 
-export default SalesItemRow;
+export default memo(SalesItemRow);
