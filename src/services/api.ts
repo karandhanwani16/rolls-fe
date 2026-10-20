@@ -190,9 +190,16 @@ export const salesAPI = {
     });
     return response.data;
   },
-  getInvoiceHTML: async (id: string, type: "bill" | "challan" = "bill") => {
+  getInvoiceHTML: async (
+    id: string,
+    type: "bill" | "challan" = "bill",
+    options?: { showInterestNote?: boolean }
+  ) => {
     const response = await api.get(`/sales/invoice-html/${id}`, {
-      params: { type },
+      params: {
+        type,
+        ...(options?.showInterestNote ? { showInterestNote: "true" } : {}),
+      },
     });
     return response.data;
   },
@@ -441,12 +448,24 @@ export const paymentsOutAPI = {
 
 // Pending Bills Report API
 export const pendingBillsAPI = {
-  getCustomerPendingBills: async () => {
-    const response = await api.get('/pending-bills/customers');
+  getCustomerPendingBills: async ({
+    partyIds = [],
+  }: { partyIds?: string[] } = {}) => {
+    const response = await api.get('/pending-bills/customers', {
+      params: {
+        partyIds: partyIds.length ? partyIds.join(',') : undefined,
+      },
+    });
     return response.data;
   },
-  getSupplierPendingBills: async () => {
-    const response = await api.get('/pending-bills/suppliers');
+  getSupplierPendingBills: async ({
+    partyIds = [],
+  }: { partyIds?: string[] } = {}) => {
+    const response = await api.get('/pending-bills/suppliers', {
+      params: {
+        partyIds: partyIds.length ? partyIds.join(',') : undefined,
+      },
+    });
     return response.data;
   },
 };

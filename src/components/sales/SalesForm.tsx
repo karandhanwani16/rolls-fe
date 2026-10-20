@@ -16,6 +16,7 @@ import SalesDetails from "./SalesDetails";
 import SalesItems from "./SalesItems";
 import SalesActions from "./SalesActions";
 import { printSaleDocument } from "@/lib/downloadSalePdf";
+import { InterestNotePrintDialog } from "@/components/sales/InterestNotePrintDialog";
 import { DEFAULT_QUANTITY_UNIT, normalizeUnit } from "@/lib/quantityUnits";
 import { getRegularCustomers } from "@/lib/partyTypes";
 
@@ -68,6 +69,7 @@ const SalesForm = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
+  const [interestDialogOpen, setInterestDialogOpen] = useState(false);
   const [allRollsPool, setAllRollsPool] = useState<Record<string, any[]>>({});
   const [formData, setFormData] = useState<SalesFormData>({
     sales_no: "",
@@ -869,20 +871,33 @@ const SalesForm = () => {
 
   const handlePrint = async (type: "bill" | "challan") => {
     if (!id) return;
+
+    if (type === "bill") {
+      setInterestDialogOpen(true);
+      return;
+    }
+
     try {
-      toast.info(
-        type === "challan"
-          ? "Opening challan print dialog..."
-          : "Opening sales bill print dialog..."
-      );
+      toast.info("Opening challan print dialog...");
       await printSaleDocument(id, formData.sales_no, type);
     } catch (error) {
       console.error("Error printing document:", error);
-      toast.error(
-        type === "challan"
-          ? "Failed to print challan"
-          : "Failed to print sales bill"
-      );
+      toast.error("Failed to print challan");
+    }
+  };
+
+  const handleConfirmBillPrint = async (showInterestNote: boolean) => {
+    if (!id) return;
+    setInterestDialogOpen(false);
+
+    try {
+      toast.info("Opening sales bill print dialog...");
+      await printSaleDocument(id, formData.sales_no, "bill", {
+        showInterestNote,
+      });
+    } catch (error) {
+      console.error("Error printing document:", error);
+      toast.error("Failed to print sales bill");
     }
   };
 
@@ -965,6 +980,13 @@ const SalesForm = () => {
 
         <SalesActions formData={formData} setFormData={setFormData} />
       </form>
+
+      <InterestNotePrintDialog
+        open={interestDialogOpen}
+        onOpenChange={setInterestDialogOpen}
+        creditDays={formData.credit_days}
+        onConfirm={handleConfirmBillPrint}
+      />
     </div>
   );
 };

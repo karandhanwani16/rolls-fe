@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
-import { paymentsInAPI } from "@/services/api";
+import { paymentsInAPI, customersAPI } from "@/services/api";
+import { getRegularCustomers } from "@/lib/partyTypes";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Table,
@@ -12,33 +13,106 @@ import {
 import { format } from "date-fns";
 import { Loader2, Download, FileText, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { downloadReportPdf, formatPdfAmount, formatPdfDate } from "@/lib/reportPdf";
+import { Input } from "@/components/ui/input";
+import {
+  downloadReportPdf,
+  formatPdfAmount,
+  formatPdfDate,
+  formatPdfPeriod,
+} from "@/lib/reportPdf";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { useTableControls } from "@/hooks/useTableControls";
 import { SortableHeader } from "@/components/ui/sortable-header";
 
+const sortableHeadClass =
+  "text-white [&_button]:text-white [&_button]:hover:text-white";
+
+const formatAmount = (amount: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount || 0);
+
+const getFinancialYearStart = () => {
+  const now = new Date();
+  const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${year}-04-01`;
+};
+
+const paymentDate = (payment: any) =>
+  payment.payment_date || payment.created_at;
+
+const isStandaloneVatav = (payment: any) => {
+  const category = (payment.payment_category || "NORMAL").toUpperCase();
+  return (
+    category === "VATAV" &&
+    (payment.entry_type === "STANDALONE" || !payment.actual_id)
+  );
+};
+
+const categoryLabel = (payment: any) => {
+  const category = (payment.payment_category || "NORMAL").toUpperCase();
+  return category === "VATAV" ? "Watav" : "Normal";
+};
+
 const PaymentInReport = () => {
   const [paymentsIn, setPaymentsIn] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dateFiltered, setDateFiltered] = useState<any[]>([]);
   const { toast } = useToast();
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+  const [startDate, setStartDate] = useState(getFinancialYearStart());
+  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [partySearch, setPartySearch] = useState("");
+  const [resultSearch, setResultSearch] = useState("");
 
   useEffect(() => {
+    fetchCustomers();
     fetchPaymentsIn();
   }, []);
+
+  const fetchCustomers = async () => {
+    try {
+      const data = await customersAPI.getAll();
+      setCustomers(getRegularCustomers(data || []));
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch customer data",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchPaymentsIn = async () => {
     try {
       setLoading(true);
       const response = await paymentsInAPI.getAll();
-      const payments = response.data || [];
-      setPaymentsIn(payments);
-      setDateFiltered(payments);
+      setPaymentsIn(response.data || []);
     } catch (error) {
       console.error("Error fetching payments in:", error);
       toast({
@@ -51,34 +125,66 @@ const PaymentInReport = () => {
     }
   };
 
-  const handleDateChange = (startDate: Date | undefined, endDate: Date | undefined) => {
-    if (!startDate || !endDate) return;
-    
-    const filtered = paymentsIn.filter((payment) => {
-      const paymentDate = new Date(payment.created_at);
-      return paymentDate >= startDate && paymentDate <= endDate;
+  const filteredPayments = useMemo(() => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    const q = resultSearch.trim().toLowerCase();
+
+    return paymentsIn.filter((payment) => {
+      // Ledger-relevant only: NORMAL + VATAV customer payments; exclude STANDALONE watav
+      if (isStandaloneVatav(payment)) return false;
+
+      const date = new Date(paymentDate(payment));
+      if (Number.isNaN(date.getTime()) || date < start || date > end) return false;
+
+      const customerId = payment.actual_id;
+      if (
+        selectedCustomers.length > 0 &&
+        (!customerId || !selectedCustomers.includes(customerId))
+      ) {
+        return false;
+      }
+
+      if (!q) return true;
+
+      const haystack = [
+        payment.actual_customer?.name,
+        payment.receive_customer?.name,
+        payment.type,
+        payment.description,
+        payment.payment_category,
+        payment.sale?.sales_no,
+        String(payment.received_amount ?? ""),
+        String(payment.actual_amount ?? ""),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(q);
     });
-    
-    setDateFiltered(filtered);
-  };
+  }, [paymentsIn, startDate, endDate, selectedCustomers, resultSearch]);
 
   const getSortValue = useMemo(
     () => (payment: any, key: string) => {
       switch (key) {
-        case "party":
-          return payment.customer?.name || "";
-        case "customer_type":
-          return payment.customer_type || "";
-        case "received":
+        case "date":
+          return paymentDate(payment) ? new Date(paymentDate(payment)) : null;
+        case "customer":
+          return payment.actual_customer?.name || "";
+        case "amount":
           return payment.received_amount ?? 0;
         case "actual":
           return payment.actual_amount ?? 0;
-        case "charges":
-          return payment.charges ?? 0;
         case "type":
           return payment.type || "";
-        case "date":
-          return payment.created_at ? new Date(payment.created_at) : null;
+        case "category":
+          return categoryLabel(payment);
+        case "description":
+          return payment.description || "";
+        case "ref":
+          return payment.sale?.sales_no || "";
         default:
           return null;
       }
@@ -87,53 +193,75 @@ const PaymentInReport = () => {
   );
 
   const { sort, toggleSort, rows } = useTableControls({
-    data: dateFiltered,
+    data: filteredPayments,
     getSortValue,
     defaultSort: { key: "date", direction: "desc" },
   });
 
-  const exportToPDF = () => {
-    const totalReceived = rows.reduce((sum, p) => sum + (p.received_amount || 0), 0);
-    const totalActual = rows.reduce((sum, p) => sum + (p.actual_amount || 0), 0);
-    const totalCharges = rows.reduce((sum, p) => sum + (p.charges || 0), 0);
+  const totalReceived = rows.reduce(
+    (sum, p) => sum + (p.received_amount || 0),
+    0
+  );
+  const totalActual = rows.reduce((sum, p) => sum + (p.actual_amount || 0), 0);
 
+  const selectedCustomerNames =
+    selectedCustomers.length > 0
+      ? customers
+          .filter((c) => selectedCustomers.includes(c.id))
+          .map((c) => c.name)
+          .join(", ")
+      : "All Customers";
+
+  const filteredCustomers = customers.filter(
+    (customer) =>
+      customer.name.toLowerCase().includes(partySearch.toLowerCase()) ||
+      customer.phone?.toLowerCase().includes(partySearch.toLowerCase()) ||
+      customer.city?.toLowerCase().includes(partySearch.toLowerCase())
+  );
+
+  const exportToPDF = () => {
     downloadReportPdf({
-      title: "Payments In Report",
-      filename: `payments_in_report_${format(new Date(), "yyyy-MM-dd")}.pdf`,
+      title: "Payment In Report",
+      filename: `payment_in_report_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`,
       orientation: "landscape",
       meta: [
+        { label: "Customers", value: selectedCustomerNames },
+        { label: "Period", value: formatPdfPeriod(startDate, endDate) },
         { label: "Entries", value: String(rows.length) },
-        { label: "Generated", value: format(new Date(), "dd/MM/yyyy HH:mm") },
       ],
       summary: [
-        { label: "Received", value: formatPdfAmount(totalReceived) },
-        { label: "Charges", value: formatPdfAmount(totalCharges) },
-        { label: "Actual Amount", value: formatPdfAmount(totalActual), emphasize: true },
+        {
+          label: "Total Received",
+          value: formatPdfAmount(totalReceived),
+          emphasize: true,
+        },
+        { label: "Total Actual / Net", value: formatPdfAmount(totalActual) },
+        { label: "Payments", value: String(rows.length) },
       ],
       columns: [
+        { header: "Date", width: 26, align: "center" },
         { header: "Customer", align: "left" },
-        { header: "Type", width: 32 },
-        { header: "Received", width: 32, align: "right" },
-        { header: "Actual", width: 32, align: "right" },
-        { header: "Charges", width: 28, align: "right" },
-        { header: "Payment Type", width: 32, align: "center" },
-        { header: "Date", width: 28, align: "center" },
+        { header: "Amount", width: 30, align: "right" },
+        { header: "Type", width: 28, align: "center" },
+        { header: "Category", width: 24, align: "center" },
+        { header: "Description" },
+        { header: "Bill / Ref", width: 28, align: "center" },
       ],
       rows: rows.map((payment) => [
-        payment.customer ? payment.customer.name : "—",
-        payment.customer_type || "—",
+        formatPdfDate(paymentDate(payment)),
+        payment.actual_customer?.name || "—",
         formatPdfAmount(payment.received_amount, { prefix: false }),
-        formatPdfAmount(payment.actual_amount, { prefix: false }),
-        formatPdfAmount(payment.charges || 0, { prefix: false }),
         payment.type || "—",
-        formatPdfDate(payment.created_at),
+        categoryLabel(payment),
+        payment.description || "—",
+        payment.sale?.sales_no || "—",
       ]),
       foot: [
         "",
         "Total",
         formatPdfAmount(totalReceived, { prefix: false }),
-        formatPdfAmount(totalActual, { prefix: false }),
-        formatPdfAmount(totalCharges, { prefix: false }),
+        "",
+        "",
         "",
         "",
       ],
@@ -142,34 +270,39 @@ const PaymentInReport = () => {
 
   const exportToCSV = () => {
     const headers = [
-      "Customer Type", 
-      "Customer", 
-      "Received Amount", 
-      "Actual Amount", 
-      "Charges", 
-      "Type", 
-      "Date"
+      "Date",
+      "Customer",
+      "Received Amount",
+      "Actual Amount",
+      "Type",
+      "Category",
+      "Description",
+      "Bill / Ref",
     ];
     const csvContent = [
       headers.join(","),
-      ...rows.map((payment) => {
-        return [
-          `"${payment.customer_type || ''}"`,
-          `"${payment.customer ? payment.customer.name : ''}"`,
-          payment.received_amount,
-          payment.actual_amount,
-          payment.charges || 0,
-          `"${payment.type || ''}"`,
-          format(new Date(payment.created_at), "yyyy-MM-dd")
-        ].join(",");
-      }),
+      ...rows.map((payment) =>
+        [
+          format(new Date(paymentDate(payment)), "yyyy-MM-dd"),
+          `"${payment.actual_customer?.name || ""}"`,
+          payment.received_amount ?? 0,
+          payment.actual_amount ?? 0,
+          `"${payment.type || ""}"`,
+          `"${categoryLabel(payment)}"`,
+          `"${(payment.description || "").replace(/"/g, '""')}"`,
+          `"${payment.sale?.sales_no || ""}"`,
+        ].join(",")
+      ),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `payments_in_report_${format(new Date(), "yyyy-MM-dd")}.csv`);
+    link.setAttribute(
+      "download",
+      `payment_in_report_${format(new Date(), "yyyy-MM-dd")}.csv`
+    );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -178,17 +311,79 @@ const PaymentInReport = () => {
 
   return (
     <ReportLayout
-      title="Payments In Report"
-      description="View and export payments received information"
-      onDateChange={handleDateChange}
+      title="Payment In Report"
+      description="Payments received from customers (normal and watav customer payments)"
     >
-      {loading ? (
-        <div className="flex justify-center items-center p-8">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <div className="flex flex-col space-y-4">
-          <div className="flex justify-end">
+      <div className="flex flex-col space-y-4">
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <div className="flex flex-wrap gap-4">
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-[180px]"
+            />
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-[180px]"
+            />
+            <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={customerOpen}
+                  className="w-[240px] justify-between"
+                >
+                  {selectedCustomers.length > 0
+                    ? `${selectedCustomers.length} customer(s) selected`
+                    : "All customers"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[240px] p-0">
+                <Command>
+                  <CommandInput
+                    placeholder="Search customers..."
+                    value={partySearch}
+                    onValueChange={setPartySearch}
+                  />
+                  <CommandEmpty>No customers found.</CommandEmpty>
+                  <CommandGroup className="max-h-64 overflow-auto">
+                    {filteredCustomers.map((customer) => (
+                      <CommandItem
+                        key={customer.id}
+                        onSelect={() => {
+                          setSelectedCustomers((prev) =>
+                            prev.includes(customer.id)
+                              ? prev.filter((id) => id !== customer.id)
+                              : [...prev, customer.id]
+                          );
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedCustomers.includes(customer.id)
+                              ? "opacity-100"
+                              : "opacity-0"
+                          )}
+                        />
+                        {customer.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <Input
+              placeholder="Search results..."
+              value={resultSearch}
+              onChange={(e) => setResultSearch(e.target.value)}
+              className="w-[200px]"
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -208,64 +403,186 @@ const PaymentInReport = () => {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        <div className="rounded-md border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableHeader label="Customer" sortKey="party" sort={sort} onSort={toggleSort} />
-                <SortableHeader label="Type" sortKey="customer_type" sort={sort} onSort={toggleSort} />
-                <SortableHeader label="Received Amount" sortKey="received" sort={sort} onSort={toggleSort} align="right" className="text-right" />
-                <SortableHeader label="Actual Amount" sortKey="actual" sort={sort} onSort={toggleSort} align="right" className="text-right" />
-                <SortableHeader label="Charges" sortKey="charges" sort={sort} onSort={toggleSort} align="right" className="text-right" />
-                <SortableHeader label="Payment Type" sortKey="type" sort={sort} onSort={toggleSort} />
-                <SortableHeader label="Date" sortKey="date" sort={sort} onSort={toggleSort} />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length > 0 ? (
-                rows.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell className="font-medium">
-                      {payment.customer ? payment.customer.name : "-"}
-                    </TableCell>
-                    <TableCell>{payment.customer_type}</TableCell>
-                    <TableCell className="text-right">
-                      {new Intl.NumberFormat('en-IN', {
-                        style: 'currency',
-                        currency: 'INR',
-                        maximumFractionDigits: 0
-                      }).format(payment.received_amount)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {new Intl.NumberFormat('en-IN', {
-                        style: 'currency',
-                        currency: 'INR',
-                        maximumFractionDigits: 0
-                      }).format(payment.actual_amount)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {new Intl.NumberFormat('en-IN', {
-                        style: 'currency',
-                        currency: 'INR',
-                        maximumFractionDigits: 0
-                      }).format(payment.charges || 0)}
-                    </TableCell>
-                    <TableCell>{payment.type}</TableCell>
-                    <TableCell>{format(new Date(payment.created_at), "dd MMM yyyy")}</TableCell>
+        </div>
+
+        {selectedCustomers.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {selectedCustomers.map((customerId) => {
+              const customer = customers.find((c) => c.id === customerId);
+              return customer ? (
+                <Badge
+                  key={customerId}
+                  variant="secondary"
+                  className="flex items-center gap-1"
+                >
+                  {customer.name}
+                  <X
+                    className="h-3 w-3 cursor-pointer"
+                    onClick={() =>
+                      setSelectedCustomers((prev) =>
+                        prev.filter((id) => id !== customerId)
+                      )
+                    }
+                  />
+                </Badge>
+              ) : null;
+            })}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center items-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="sticky top-0 z-10 bg-background pb-4">
+              <div className="bg-sidebar/5 rounded-lg p-4 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex justify-between items-center md:flex-col md:items-start md:gap-1">
+                  <span className="text-sm text-muted-foreground">
+                    Total Received
+                  </span>
+                  <span className="font-semibold text-emerald-700">
+                    {formatAmount(totalReceived)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center md:flex-col md:items-start md:gap-1">
+                  <span className="text-sm text-muted-foreground">
+                    Total Actual / Net
+                  </span>
+                  <span className="font-medium">{formatAmount(totalActual)}</span>
+                </div>
+                <div className="flex justify-between items-center md:flex-col md:items-start md:gap-1">
+                  <span className="text-sm text-muted-foreground">
+                    Payments
+                  </span>
+                  <span className="font-medium">{rows.length}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-sidebar">
+                  <TableRow>
+                    <SortableHeader
+                      label="Date"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={`rounded-tl-lg ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Customer"
+                      sortKey="customer"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Amount"
+                      sortKey="amount"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                      className={`text-right ${sortableHeadClass}`}
+                    />
+                    <SortableHeader
+                      label="Type"
+                      sortKey="type"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Category"
+                      sortKey="category"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Description"
+                      sortKey="description"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
+                      label="Bill / Ref"
+                      sortKey="ref"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={`rounded-tr-lg ${sortableHeadClass}`}
+                    />
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
-                    No payment data found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        </div>
-      )}
+                </TableHeader>
+                <TableBody>
+                  {rows.length > 0 ? (
+                    <>
+                      {rows.map((payment) => (
+                        <TableRow
+                          key={payment.id}
+                          className="hover:bg-sidebar/10"
+                        >
+                          <TableCell>
+                            {format(
+                              new Date(paymentDate(payment)),
+                              "dd MMM yyyy"
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {payment.actual_customer?.name || "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatAmount(payment.received_amount)}
+                          </TableCell>
+                          <TableCell className="capitalize">
+                            {payment.type || "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                categoryLabel(payment) === "Watav"
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                            >
+                              {categoryLabel(payment)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[220px] truncate">
+                            {payment.description || "—"}
+                          </TableCell>
+                          <TableCell>{payment.sale?.sales_no || "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="border-t-2 border-sidebar/20">
+                        <TableCell
+                          colSpan={2}
+                          className="text-right font-medium"
+                        >
+                          Total
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-emerald-700">
+                          {formatAmount(totalReceived)}
+                        </TableCell>
+                        <TableCell colSpan={4}></TableCell>
+                      </TableRow>
+                    </>
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8">
+                        No payment in data found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+      </div>
     </ReportLayout>
   );
 };

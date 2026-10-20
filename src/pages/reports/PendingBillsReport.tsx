@@ -1,17 +1,42 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReportLayout from "@/components/reports/ReportLayout";
-import { pendingBillsAPI } from "@/services/api";
+import {
+  customersAPI,
+  pendingBillsAPI,
+  suppliersAPI,
+} from "@/services/api";
+import { getRegularCustomers } from "@/lib/partyTypes";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
-import { Loader2, Search } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 type PendingBillsVariant = "customer" | "supplier";
@@ -64,6 +89,13 @@ interface PendingBillsData {
   groups: PendingPartyGroup[];
 }
 
+interface PartyOption {
+  id: string;
+  name: string;
+  phone?: string | null;
+  city?: string | null;
+}
+
 const formatAmount = (amount: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -79,6 +111,12 @@ const formatDate = (value?: string | null) => {
   } catch {
     return "—";
   }
+};
+
+const getFinancialYearStart = () => {
+  const now = new Date();
+  const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${year}-04-01`;
 };
 
 const statusBadgeVariant = (status: string) => {
@@ -106,8 +144,15 @@ interface PendingBillsReportProps {
 const PendingBillsReport = ({ variant }: PendingBillsReportProps) => {
   const isCustomer = variant === "customer";
   const [data, setData] = useState<PendingBillsData | null>(null);
+  const [parties, setParties] = useState<PartyOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPartyIds, setSelectedPartyIds] = useState<string[]>([]);
+  const [partyOpen, setPartyOpen] = useState(false);
+  const [partySearch, setPartySearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [startDate, setStartDate] = useState(getFinancialYearStart());
+  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [viewMode, setViewMode] = useState<"all" | "overdue">("all");
   const [openParties, setOpenParties] = useState<string[]>([]);
   const [openBills, setOpenBills] = useState<string[]>([]);
   const { toast } = useToast();
@@ -120,12 +165,49 @@ const PendingBillsReport = ({ variant }: PendingBillsReportProps) => {
   const partyLabelPlural = isCustomer ? "Customers" : "Suppliers";
   const billLabel = isCustomer ? "Sales" : "Purchase";
 
+  const fetchParties = useCallback(async () => {
+    try {
+      if (isCustomer) {
+        const response = await customersAPI.getAll();
+        setParties(
+          getRegularCustomers(response || []).map((customer: any) => ({
+            id: customer.id,
+            name: customer.name,
+            phone: customer.phone,
+            city: customer.city,
+          }))
+        );
+      } else {
+        const response = await suppliersAPI.getAll();
+        setParties(
+          (response || []).map((supplier: any) => ({
+            id: supplier.id,
+            name: supplier.name,
+            phone: supplier.phone,
+            city: supplier.city,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error(`Error fetching ${partyLabelPlural.toLowerCase()}:`, error);
+      toast({
+        title: "Error",
+        description: `Failed to fetch ${partyLabelPlural.toLowerCase()}`,
+        variant: "destructive",
+      });
+    }
+  }, [isCustomer, partyLabelPlural, toast]);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const response = isCustomer
-        ? await pendingBillsAPI.getCustomerPendingBills()
-        : await pendingBillsAPI.getSupplierPendingBills();
+        ? await pendingBillsAPI.getCustomerPendingBills({
+            partyIds: selectedPartyIds,
+          })
+        : await pendingBillsAPI.getSupplierPendingBills({
+            partyIds: selectedPartyIds,
+          });
       setData(response.data || { summary: null, groups: [] });
     } catch (error) {
       console.error("Error fetching pending bills:", error);
@@ -138,64 +220,191 @@ const PendingBillsReport = ({ variant }: PendingBillsReportProps) => {
     } finally {
       setLoading(false);
     }
-  }, [isCustomer, title, toast]);
+  }, [isCustomer, selectedPartyIds, title, toast]);
+
+  useEffect(() => {
+    fetchParties();
+  }, [fetchParties]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  const filteredPartyOptions = useMemo(() => {
+    const query = partySearch.trim().toLowerCase();
+    if (!query) return parties;
+    return parties.filter(
+      (party) =>
+        party.name.toLowerCase().includes(query) ||
+        party.phone?.toLowerCase().includes(query) ||
+        party.city?.toLowerCase().includes(query)
+    );
+  }, [parties, partySearch]);
+
   const filteredGroups = useMemo(() => {
     const groups = data?.groups || [];
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return groups;
-    return groups.filter((group) => {
-      const inParty =
-        group.party_name.toLowerCase().includes(query) ||
-        group.party_phone?.toLowerCase().includes(query) ||
-        group.party_city?.toLowerCase().includes(query);
-      const inBills = group.bills.some((bill) =>
-        (bill.bill_no || "").toLowerCase().includes(query)
-      );
-      return inParty || inBills;
-    });
-  }, [data?.groups, searchQuery]);
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
-  const summary = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return (
-        data?.summary || {
+    return groups
+      .map((group) => {
+        const bills = group.bills.filter((bill) => {
+          const billDate = new Date(bill.date);
+          const inDateRange = billDate >= start && billDate <= end;
+          const overdueMatch =
+            viewMode === "all" || (bill.overdue_days || 0) > 0;
+          const searchMatch =
+            !query ||
+            (bill.bill_no || "").toLowerCase().includes(query) ||
+            group.party_name.toLowerCase().includes(query) ||
+            group.party_phone?.toLowerCase().includes(query) ||
+            group.party_city?.toLowerCase().includes(query);
+          return inDateRange && overdueMatch && searchMatch;
+        });
+
+        if (!bills.length) return null;
+
+        const total_bill_amount = bills.reduce(
+          (sum, bill) => sum + (bill.bill_total || 0),
+          0
+        );
+        const total_paid = bills.reduce(
+          (sum, bill) => sum + (bill.paid_amount || 0),
+          0
+        );
+        const total_outstanding = bills.reduce(
+          (sum, bill) => sum + (bill.outstanding_amount || 0),
+          0
+        );
+
+        return {
+          ...group,
+          bills,
+          bill_count: bills.length,
+          total_bill_amount,
+          total_paid,
+          total_outstanding,
+        };
+      })
+      .filter(Boolean) as PendingPartyGroup[];
+  }, [data?.groups, searchQuery, startDate, endDate, viewMode]);
+
+  const summary = useMemo(
+    () =>
+      filteredGroups.reduce(
+        (acc, group) => {
+          acc.party_count += 1;
+          acc.bill_count += group.bill_count;
+          acc.total_bill_amount += group.total_bill_amount;
+          acc.total_paid += group.total_paid;
+          acc.total_outstanding += group.total_outstanding;
+          return acc;
+        },
+        {
           party_count: 0,
           bill_count: 0,
           total_bill_amount: 0,
           total_paid: 0,
           total_outstanding: 0,
         }
-      );
-    }
-    return filteredGroups.reduce(
-      (acc, group) => {
-        acc.party_count += 1;
-        acc.bill_count += group.bill_count;
-        acc.total_bill_amount += group.total_bill_amount;
-        acc.total_paid += group.total_paid;
-        acc.total_outstanding += group.total_outstanding;
-        return acc;
-      },
-      {
-        party_count: 0,
-        bill_count: 0,
-        total_bill_amount: 0,
-        total_paid: 0,
-        total_outstanding: 0,
-      }
+      ),
+    [filteredGroups]
+  );
+
+  const toggleParty = (partyId: string) => {
+    setSelectedPartyIds((prev) =>
+      prev.includes(partyId)
+        ? prev.filter((id) => id !== partyId)
+        : [...prev, partyId]
     );
-  }, [data?.summary, filteredGroups, searchQuery]);
+  };
 
   return (
     <ReportLayout title={title} description={description}>
       <div className="flex flex-col space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="relative w-full max-w-md">
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-[180px]"
+          />
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-[180px]"
+          />
+          <Select
+            value={viewMode}
+            onValueChange={(value: "all" | "overdue") => setViewMode(value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="View" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Pending</SelectItem>
+              <SelectItem value="overdue">Overdue Only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Popover open={partyOpen} onOpenChange={setPartyOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={partyOpen}
+                className="w-[240px] justify-between"
+              >
+                {selectedPartyIds.length > 0
+                  ? `${selectedPartyIds.length} ${partyLabel.toLowerCase()}(s) selected`
+                  : `All ${partyLabelPlural.toLowerCase()}`}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[280px] p-0">
+              <Command shouldFilter={false}>
+                <CommandInput
+                  placeholder={`Search ${partyLabelPlural.toLowerCase()}...`}
+                  value={partySearch}
+                  onValueChange={setPartySearch}
+                />
+                <CommandEmpty>No {partyLabelPlural.toLowerCase()} found.</CommandEmpty>
+                <CommandGroup className="max-h-64 overflow-auto">
+                  {filteredPartyOptions.map((party) => (
+                    <CommandItem
+                      key={party.id}
+                      value={party.id}
+                      onSelect={() => toggleParty(party.id)}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          selectedPartyIds.includes(party.id)
+                            ? "opacity-100"
+                            : "opacity-0"
+                        )}
+                      />
+                      <span className="truncate">{party.name}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {selectedPartyIds.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedPartyIds([])}
+              className="h-9 px-2 text-muted-foreground"
+            >
+              <X className="mr-1 h-4 w-4" />
+              Clear filter
+            </Button>
+          )}
+          <div className="relative w-full max-w-md sm:ml-auto">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
@@ -362,9 +571,12 @@ const PendingBillsReport = ({ variant }: PendingBillsReportProps) => {
                             <AccordionContent className="px-3 pb-3">
                               <div className="rounded-md border bg-white overflow-hidden">
                                 <div className="bg-sidebar px-3 py-2 text-xs font-medium text-white flex justify-between">
-                                  <span>Payments & credits against this bill</span>
                                   <span>
-                                    Remaining {formatAmount(bill.outstanding_amount)}
+                                    Payment transactions against this bill
+                                  </span>
+                                  <span>
+                                    Remaining{" "}
+                                    {formatAmount(bill.outstanding_amount)}
                                   </span>
                                 </div>
                                 {bill.applications?.length ? (

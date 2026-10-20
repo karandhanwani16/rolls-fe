@@ -124,6 +124,8 @@ const navGroups: NavGroup[] = [
       { label: "Sales Report", to: "/reports/sales" },
       { label: "Outstanding Report", to: "/reports/outstanding" },
       { label: "Customer Pending Bills", to: "/reports/customer-pending-bills" },
+      { label: "Payment In Report", to: "/reports/payments-in" },
+      { label: "Payment Out Report", to: "/reports/payments-out" },
       { label: "Purchase Report", to: "/reports/purchases" },
       { label: "Purchase Outstanding", to: "/reports/purchase-outstanding" },
       { label: "Supplier Pending Bills", to: "/reports/supplier-pending-bills" },

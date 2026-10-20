@@ -2,15 +2,22 @@ import { salesAPI } from "@/services/api";
 
 export type SaleDocumentType = "bill" | "challan";
 
+export type PrintSaleDocumentOptions = {
+  showInterestNote?: boolean;
+};
+
 /**
  * Opens the challan/sales bill HTML in a new window and shows the browser print dialog.
  */
 export async function printSaleDocument(
   id: string,
   _salesNo: string,
-  type: SaleDocumentType
+  type: SaleDocumentType,
+  options: PrintSaleDocumentOptions = {}
 ) {
-  const htmlResponse = await salesAPI.getInvoiceHTML(id, type);
+  const htmlResponse = await salesAPI.getInvoiceHTML(id, type, {
+    showInterestNote: options.showInterestNote,
+  });
   if (!htmlResponse.success || !htmlResponse.data) {
     throw new Error("Failed to get document HTML");
   }

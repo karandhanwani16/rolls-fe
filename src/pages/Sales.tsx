@@ -36,6 +36,7 @@ import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { printSaleDocument } from "@/lib/downloadSalePdf";
+import { InterestNotePrintDialog } from "@/components/sales/InterestNotePrintDialog";
 import { useTableControls } from "@/hooks/useTableControls";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { TableToolbar } from "@/components/ui/table-toolbar";
@@ -47,6 +48,12 @@ const Sales = () => {
   const { toast: toastNotification } = useToast();
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [interestDialogOpen, setInterestDialogOpen] = useState(false);
+  const [pendingBillPrint, setPendingBillPrint] = useState<{
+    id: string;
+    salesNo: string;
+    creditDays: number;
+  } | null>(null);
 
   useEffect(() => {
     fetchSales();
@@ -95,26 +102,43 @@ const Sales = () => {
     id: string,
     type: "bill" | "challan"
   ) => {
+    const sale = sales.find((s) => s.id === id) || selectedSale;
+    if (!sale) {
+      toast.error("Sale not found");
+      return;
+    }
+
+    if (type === "bill") {
+      setPendingBillPrint({
+        id,
+        salesNo: sale.sales_no,
+        creditDays: sale.credit_days || sale.customer?.credit_days || 0,
+      });
+      setInterestDialogOpen(true);
+      return;
+    }
+
     try {
-      toast.info(
-        type === "challan"
-          ? "Opening challan print dialog..."
-          : "Opening sales bill print dialog..."
-      );
-
-      const sale = sales.find((s) => s.id === id) || selectedSale;
-      if (!sale) {
-        throw new Error("Sale not found");
-      }
-
+      toast.info("Opening challan print dialog...");
       await printSaleDocument(id, sale.sales_no, type);
     } catch (error) {
       console.error("Error printing document:", error);
-      toast.error(
-        type === "challan"
-          ? "Failed to print challan"
-          : "Failed to print sales bill"
-      );
+      toast.error("Failed to print challan");
+    }
+  };
+
+  const handleConfirmBillPrint = async (showInterestNote: boolean) => {
+    if (!pendingBillPrint) return;
+    const { id, salesNo } = pendingBillPrint;
+    setInterestDialogOpen(false);
+    setPendingBillPrint(null);
+
+    try {
+      toast.info("Opening sales bill print dialog...");
+      await printSaleDocument(id, salesNo, "bill", { showInterestNote });
+    } catch (error) {
+      console.error("Error printing document:", error);
+      toast.error("Failed to print sales bill");
     }
   };
 
@@ -569,6 +593,16 @@ const Sales = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <InterestNotePrintDialog
+        open={interestDialogOpen}
+        onOpenChange={(open) => {
+          setInterestDialogOpen(open);
+          if (!open) setPendingBillPrint(null);
+        }}
+        creditDays={pendingBillPrint?.creditDays}
+        onConfirm={handleConfirmBillPrint}
+      />
     </DashboardLayout>
   );
 };
