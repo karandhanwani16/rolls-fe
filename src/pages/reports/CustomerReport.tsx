@@ -140,13 +140,28 @@ const CustomerReport = () => {
     if (transactions.summary?.closingBalance !== undefined) {
       return transactions.summary.closingBalance;
     }
-    return transactions.data.reduce((sum, item) => sum + item.debit - item.credit, 0);
+    return transactions.data.reduce(
+      (sum, item) => sum + item.debit - item.credit - (item.discount || 0),
+      0
+    );
   };
 
   const getOpeningBalance = () => transactions.summary?.openingBalance ?? 0;
 
+  const getTotalDebit = () =>
+    transactions.summary?.totalDebit ??
+    transactions.data.reduce((sum, item) => sum + item.debit, 0);
+
+  const getTotalCredit = () =>
+    transactions.summary?.totalCredit ??
+    transactions.data.reduce((sum, item) => sum + item.credit, 0);
+
+  const getTotalDiscount = () =>
+    transactions.summary?.totalDiscount ??
+    transactions.data.reduce((sum, item) => sum + (item.discount || 0), 0);
+
   const exportToCSV = () => {
-    const headers = ["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit", "Balance"];
+    const headers = ["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit", "Discount", "Balance"];
     const csvContent = [
       headers.join(","),
       ...transactions.data.map((item) => {
@@ -157,6 +172,7 @@ const CustomerReport = () => {
           `"${formatTransactionVoucherNo(item)}"`,
           formatAmount(item.debit),
           formatAmount(item.credit),
+          formatAmount(item.discount || 0),
           formatAmount(item.balance ?? 0),
         ].join(",");
       }),
@@ -175,8 +191,9 @@ const CustomerReport = () => {
 
   const exportToPDF = () => {
     const customerName = customers.find(c => c.id === selectedCustomer)?.name || "All Customers";
-    const totalDebit = transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0);
-    const totalCredit = transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0);
+    const totalDebit = getTotalDebit();
+    const totalCredit = getTotalCredit();
+    const totalDiscount = getTotalDiscount();
     const openingBalance = getOpeningBalance();
     const balance = getClosingBalance();
 
@@ -184,11 +201,12 @@ const CustomerReport = () => {
       { label: "Opening Balance", value: formatPdfAmount(openingBalance) },
       { label: "Total Debit", value: formatPdfAmount(totalDebit) },
       { label: "Total Credit", value: formatPdfAmount(totalCredit) },
+      { label: "Total Discount", value: formatPdfAmount(totalDiscount) },
       { label: "Closing Balance", value: formatPdfAmount(balance), emphasize: true },
     ];
 
     if (transactions.summary?.normalPayments != null || transactions.summary?.vatavPayments != null) {
-      summary.splice(3, 0,
+      summary.splice(4, 0,
         { label: "Normal Payments", value: formatPdfAmount(transactions.summary?.normalPayments || 0) },
         { label: "Watav Payments", value: formatPdfAmount(transactions.summary?.vatavPayments || 0) },
       );
@@ -209,9 +227,10 @@ const CustomerReport = () => {
         { header: "Date", width: 26, align: "center" },
         { header: "Particulars", align: "left" },
         { header: "Voucher No.", width: 42, overflow: "ellipsize" },
-        { header: "Debit", width: 36, align: "right" },
-        { header: "Credit", width: 36, align: "right" },
-        { header: "Balance", width: 38, align: "right" },
+        { header: "Debit", width: 32, align: "right" },
+        { header: "Credit", width: 32, align: "right" },
+        { header: "Discount", width: 32, align: "right" },
+        { header: "Balance", width: 34, align: "right" },
       ],
       rows: transactions.data.map((item) => [
         item.srno,
@@ -220,9 +239,19 @@ const CustomerReport = () => {
         formatTransactionVoucherNo(item),
         formatPdfAmount(item.debit, { blankZero: true, prefix: false }),
         formatPdfAmount(item.credit, { blankZero: true, prefix: false }),
+        formatPdfAmount(item.discount || 0, { blankZero: true, prefix: false }),
         formatPdfAmount(item.balance ?? 0, { prefix: false }),
       ]),
-      foot: ["", "", "", "Total", formatPdfAmount(totalDebit, { prefix: false }), formatPdfAmount(totalCredit, { prefix: false }), formatPdfAmount(balance, { prefix: false })],
+      foot: [
+        "",
+        "",
+        "",
+        "Total",
+        formatPdfAmount(totalDebit, { prefix: false }),
+        formatPdfAmount(totalCredit, { prefix: false }),
+        formatPdfAmount(totalDiscount, { prefix: false }),
+        formatPdfAmount(balance, { prefix: false }),
+      ],
     });
   };
 
@@ -374,13 +403,19 @@ const CustomerReport = () => {
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Total Debit</span>
                     <span className="font-medium">
-                      {formatAmount(transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0))}
+                      {formatAmount(getTotalDebit())}
                     </span>
                   </div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Total Credit</span>
                     <span className="font-medium">
-                      {formatAmount(transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0))}
+                      {formatAmount(getTotalCredit())}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-muted-foreground">Total Discount</span>
+                    <span className="font-medium">
+                      {formatAmount(getTotalDiscount())}
                     </span>
                   </div>
                   {(transactions.summary?.normalPayments != null ||
@@ -432,6 +467,7 @@ const CustomerReport = () => {
                     <TableHead className="text-white">Voucher No.</TableHead>
                     <TableHead className={amountHeadClass}>Debit</TableHead>
                     <TableHead className={amountHeadClass}>Credit</TableHead>
+                    <TableHead className={amountHeadClass}>Discount</TableHead>
                     <TableHead className={cn(amountHeadClass, "rounded-tr-lg")}>Balance</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -452,16 +488,20 @@ const CustomerReport = () => {
                           <TableCell>{formatTransactionVoucherNo(item)}</TableCell>
                           <TableCell className={amountCellClass}>{formatAmount(item.debit)}</TableCell>
                           <TableCell className={amountCellClass}>{formatAmount(item.credit)}</TableCell>
+                          <TableCell className={amountCellClass}>{formatAmount(item.discount || 0)}</TableCell>
                           <TableCell className={amountCellClass}>{formatAmount(item.balance ?? 0)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="border-t-2 border-sidebar/20">
                         <TableCell colSpan={4} className="text-right font-medium">Total</TableCell>
                         <TableCell className={cn(amountCellClass, "font-medium")}>
-                          {formatAmount(transactions.summary?.totalDebit ?? transactions.data.reduce((sum, item) => sum + item.debit, 0))}
+                          {formatAmount(getTotalDebit())}
                         </TableCell>
                         <TableCell className={cn(amountCellClass, "font-medium")}>
-                          {formatAmount(transactions.summary?.totalCredit ?? transactions.data.reduce((sum, item) => sum + item.credit, 0))}
+                          {formatAmount(getTotalCredit())}
+                        </TableCell>
+                        <TableCell className={cn(amountCellClass, "font-medium")}>
+                          {formatAmount(getTotalDiscount())}
                         </TableCell>
                         <TableCell className={cn(amountCellClass, "font-medium")}>
                           {formatAmount(getClosingBalance())}
@@ -470,7 +510,7 @@ const CustomerReport = () => {
                     </>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
+                      <TableCell colSpan={8} className="text-center py-8">
                         No data found
                       </TableCell>
                     </TableRow>
