@@ -505,7 +505,7 @@ const BillToBillPayment = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Total Available Amount</CardTitle>
+                  <CardTitle className="text-lg">Pending Amount</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold">
@@ -519,12 +519,14 @@ const BillToBillPayment = () => {
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Payments Available</CardTitle>
+                  <CardTitle className="text-lg">Available Amount</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{poolPayments.length}</p>
+                  <p className="text-2xl font-bold">
+                    {formatCurrency(reconciliationData.total_payment_amount)}
+                  </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Since{" "}
+                    Unsettled pool since{" "}
                     {reconciliationData.last_clear_date
                       ? format(new Date(reconciliationData.last_clear_date), "dd MMM yyyy")
                       : "beginning"}
@@ -547,9 +549,10 @@ const BillToBillPayment = () => {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Payments Available</CardTitle>
+                  <CardTitle>Available Amount</CardTitle>
                   <CardDescription>
-                    Unallocated payments since last reconciliation (full-bill payments excluded)
+                    Unsettled / unallocated payments since last reconciliation (full-bill payments
+                    excluded)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

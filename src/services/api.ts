@@ -439,6 +439,18 @@ export const paymentsOutAPI = {
   },
 };
 
+// Pending Bills Report API
+export const pendingBillsAPI = {
+  getCustomerPendingBills: async () => {
+    const response = await api.get('/pending-bills/customers');
+    return response.data;
+  },
+  getSupplierPendingBills: async () => {
+    const response = await api.get('/pending-bills/suppliers');
+    return response.data;
+  },
+};
+
 // Bill to Bill Payment API
 export const billPaymentsAPI = {
   getCustomerPayments: async (customerId: string) => {

@@ -141,7 +141,12 @@ const CustomerReport = () => {
       return transactions.summary.closingBalance;
     }
     return transactions.data.reduce(
-      (sum, item) => sum + item.debit - item.credit - (item.discount || 0),
+      (sum, item) =>
+        sum +
+        item.debit -
+        item.credit -
+        (item.discount || 0) -
+        (item.salesReturn || 0),
       0
     );
   };
@@ -160,8 +165,12 @@ const CustomerReport = () => {
     transactions.summary?.totalDiscount ??
     transactions.data.reduce((sum, item) => sum + (item.discount || 0), 0);
 
+  const getTotalSalesReturn = () =>
+    transactions.summary?.totalSalesReturn ??
+    transactions.data.reduce((sum, item) => sum + (item.salesReturn || 0), 0);
+
   const exportToCSV = () => {
-    const headers = ["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit", "Discount", "Balance"];
+    const headers = ["Sr. No.", "Date", "Particulars", "Voucher No.", "Debit", "Credit", "Discount", "Sales Return", "Balance"];
     const csvContent = [
       headers.join(","),
       ...transactions.data.map((item) => {
@@ -173,6 +182,7 @@ const CustomerReport = () => {
           formatAmount(item.debit),
           formatAmount(item.credit),
           formatAmount(item.discount || 0),
+          formatAmount(item.salesReturn || 0),
           formatAmount(item.balance ?? 0),
         ].join(",");
       }),
@@ -194,6 +204,7 @@ const CustomerReport = () => {
     const totalDebit = getTotalDebit();
     const totalCredit = getTotalCredit();
     const totalDiscount = getTotalDiscount();
+    const totalSalesReturn = getTotalSalesReturn();
     const openingBalance = getOpeningBalance();
     const balance = getClosingBalance();
 
@@ -202,11 +213,12 @@ const CustomerReport = () => {
       { label: "Total Debit", value: formatPdfAmount(totalDebit) },
       { label: "Total Credit", value: formatPdfAmount(totalCredit) },
       { label: "Total Discount", value: formatPdfAmount(totalDiscount) },
+      { label: "Total Sales Return", value: formatPdfAmount(totalSalesReturn) },
       { label: "Closing Balance", value: formatPdfAmount(balance), emphasize: true },
     ];
 
     if (transactions.summary?.normalPayments != null || transactions.summary?.vatavPayments != null) {
-      summary.splice(4, 0,
+      summary.splice(5, 0,
         { label: "Normal Payments", value: formatPdfAmount(transactions.summary?.normalPayments || 0) },
         { label: "Watav Payments", value: formatPdfAmount(transactions.summary?.vatavPayments || 0) },
       );
@@ -223,14 +235,15 @@ const CustomerReport = () => {
       ],
       summary,
       columns: [
-        { header: "Sr.", width: 14, align: "center" },
-        { header: "Date", width: 26, align: "center" },
+        { header: "Sr.", width: 12, align: "center" },
+        { header: "Date", width: 24, align: "center" },
         { header: "Particulars", align: "left" },
-        { header: "Voucher No.", width: 42, overflow: "ellipsize" },
-        { header: "Debit", width: 32, align: "right" },
-        { header: "Credit", width: 32, align: "right" },
-        { header: "Discount", width: 32, align: "right" },
-        { header: "Balance", width: 34, align: "right" },
+        { header: "Voucher No.", width: 36, overflow: "ellipsize" },
+        { header: "Debit", width: 28, align: "right" },
+        { header: "Credit", width: 28, align: "right" },
+        { header: "Discount", width: 28, align: "right" },
+        { header: "Sales Return", width: 30, align: "right" },
+        { header: "Balance", width: 30, align: "right" },
       ],
       rows: transactions.data.map((item) => [
         item.srno,
@@ -240,6 +253,7 @@ const CustomerReport = () => {
         formatPdfAmount(item.debit, { blankZero: true, prefix: false }),
         formatPdfAmount(item.credit, { blankZero: true, prefix: false }),
         formatPdfAmount(item.discount || 0, { blankZero: true, prefix: false }),
+        formatPdfAmount(item.salesReturn || 0, { blankZero: true, prefix: false }),
         formatPdfAmount(item.balance ?? 0, { prefix: false }),
       ]),
       foot: [
@@ -250,6 +264,7 @@ const CustomerReport = () => {
         formatPdfAmount(totalDebit, { prefix: false }),
         formatPdfAmount(totalCredit, { prefix: false }),
         formatPdfAmount(totalDiscount, { prefix: false }),
+        formatPdfAmount(totalSalesReturn, { prefix: false }),
         formatPdfAmount(balance, { prefix: false }),
       ],
     });
@@ -418,6 +433,12 @@ const CustomerReport = () => {
                       {formatAmount(getTotalDiscount())}
                     </span>
                   </div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-muted-foreground">Total Sales Return</span>
+                    <span className="font-medium">
+                      {formatAmount(getTotalSalesReturn())}
+                    </span>
+                  </div>
                   {(transactions.summary?.normalPayments != null ||
                     transactions.summary?.vatavPayments != null) && (
                     <>
@@ -468,6 +489,7 @@ const CustomerReport = () => {
                     <TableHead className={amountHeadClass}>Debit</TableHead>
                     <TableHead className={amountHeadClass}>Credit</TableHead>
                     <TableHead className={amountHeadClass}>Discount</TableHead>
+                    <TableHead className={amountHeadClass}>Sales Return</TableHead>
                     <TableHead className={cn(amountHeadClass, "rounded-tr-lg")}>Balance</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -489,6 +511,7 @@ const CustomerReport = () => {
                           <TableCell className={amountCellClass}>{formatAmount(item.debit)}</TableCell>
                           <TableCell className={amountCellClass}>{formatAmount(item.credit)}</TableCell>
                           <TableCell className={amountCellClass}>{formatAmount(item.discount || 0)}</TableCell>
+                          <TableCell className={amountCellClass}>{formatAmount(item.salesReturn || 0)}</TableCell>
                           <TableCell className={amountCellClass}>{formatAmount(item.balance ?? 0)}</TableCell>
                         </TableRow>
                       ))}
@@ -504,13 +527,16 @@ const CustomerReport = () => {
                           {formatAmount(getTotalDiscount())}
                         </TableCell>
                         <TableCell className={cn(amountCellClass, "font-medium")}>
+                          {formatAmount(getTotalSalesReturn())}
+                        </TableCell>
+                        <TableCell className={cn(amountCellClass, "font-medium")}>
                           {formatAmount(getClosingBalance())}
                         </TableCell>
                       </TableRow>
                     </>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
+                      <TableCell colSpan={9} className="text-center py-8">
                         No data found
                       </TableCell>
                     </TableRow>

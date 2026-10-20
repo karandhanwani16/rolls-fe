@@ -43,6 +43,7 @@ import WatavReport from "./pages/reports/WatavReport";
 import PendingWatav from "./pages/PendingWatav";
 import OutstandingReport from "./pages/reports/OutstandingReport";
 import PurchaseOutstandingReport from "./pages/reports/PurchaseOutstandingReport";
+import PendingBillsReport from "./pages/reports/PendingBillsReport";
 
 const queryClient = new QueryClient();
 
@@ -280,6 +281,16 @@ const AppRoutes = () => (
           <Route path="/reports/purchase-outstanding" element={
             <ProtectedRoute>
               <PurchaseOutstandingReport />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/customer-pending-bills" element={
+            <ProtectedRoute>
+              <PendingBillsReport variant="customer" />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/supplier-pending-bills" element={
+            <ProtectedRoute>
+              <PendingBillsReport variant="supplier" />
             </ProtectedRoute>
           } />
 
