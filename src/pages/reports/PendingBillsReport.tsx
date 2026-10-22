@@ -8,7 +8,16 @@ import {
 import { getRegularCustomers } from "@/lib/partyTypes";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
-import { Check, ChevronsUpDown, Loader2, Search, X } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+  Search,
+  X,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +35,12 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -37,6 +52,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  downloadReportPdf,
+  formatPdfAmount,
+  formatPdfDate,
+  formatPdfPeriod,
+} from "@/lib/reportPdf";
 import { cn } from "@/lib/utils";
 
 type PendingBillsVariant = "customer" | "supplier";
@@ -313,12 +334,148 @@ const PendingBillsReport = ({ variant }: PendingBillsReportProps) => {
     [filteredGroups]
   );
 
+  const flatBills = useMemo(
+    () =>
+      filteredGroups.flatMap((group) =>
+        group.bills.map((bill) => ({
+          party_name: group.party_name,
+          ...bill,
+        }))
+      ),
+    [filteredGroups]
+  );
+
+  const overdueCount = useMemo(
+    () => flatBills.filter((bill) => (bill.overdue_days || 0) > 0).length,
+    [flatBills]
+  );
+
+  const selectedPartyNames =
+    selectedPartyIds.length > 0
+      ? parties
+          .filter((party) => selectedPartyIds.includes(party.id))
+          .map((party) => party.name)
+          .join(", ")
+      : `All ${partyLabelPlural}`;
+
   const toggleParty = (partyId: string) => {
     setSelectedPartyIds((prev) =>
       prev.includes(partyId)
         ? prev.filter((id) => id !== partyId)
         : [...prev, partyId]
     );
+  };
+
+  const exportToPDF = () => {
+    const billNoHeader = isCustomer ? "Sales No" : "Purchase No";
+    const slug = isCustomer ? "customer_pending_bills" : "supplier_pending_bills";
+
+    downloadReportPdf({
+      title,
+      filename: `${slug}_${format(new Date(startDate), "yyyyMMdd")}_to_${format(new Date(endDate), "yyyyMMdd")}.pdf`,
+      orientation: "landscape",
+      meta: [
+        { label: partyLabelPlural, value: selectedPartyNames },
+        { label: "Period", value: formatPdfPeriod(startDate, endDate) },
+        {
+          label: "View",
+          value: viewMode === "overdue" ? "Overdue Only" : "All Pending",
+        },
+      ],
+      summary: [
+        {
+          label: "Total Outstanding",
+          value: formatPdfAmount(summary.total_outstanding),
+          emphasize: true,
+        },
+        { label: "Paid so far", value: formatPdfAmount(summary.total_paid) },
+        { label: "Pending Bills", value: String(summary.bill_count) },
+        { label: "Overdue Bills", value: String(overdueCount) },
+      ],
+      columns: [
+        { header: billNoHeader, width: 26, align: "center" },
+        { header: partyLabel, align: "left" },
+        { header: "Date", width: 24, align: "center" },
+        { header: "Due Date", width: 24, align: "center" },
+        { header: "Credit Days", width: 22, align: "center" },
+        { header: "Bill Total", width: 28, align: "right" },
+        { header: "Paid", width: 26, align: "right" },
+        { header: "Outstanding", width: 30, align: "right" },
+        { header: "Overdue", width: 20, align: "center" },
+        { header: "Status", width: 24, align: "center" },
+      ],
+      rows: flatBills.map((bill) => [
+        bill.bill_no || "—",
+        bill.party_name || "—",
+        formatPdfDate(bill.date),
+        bill.due_date ? formatPdfDate(bill.due_date) : "—",
+        String(bill.credit_days || 0),
+        formatPdfAmount(bill.bill_total, { prefix: false }),
+        formatPdfAmount(bill.paid_amount, { prefix: false }),
+        formatPdfAmount(bill.outstanding_amount, { prefix: false }),
+        String(bill.overdue_days || 0),
+        bill.payment_status || "UNPAID",
+      ]),
+      foot: [
+        "",
+        "",
+        "",
+        "",
+        "Total",
+        formatPdfAmount(summary.total_bill_amount, { prefix: false }),
+        formatPdfAmount(summary.total_paid, { prefix: false }),
+        formatPdfAmount(summary.total_outstanding, { prefix: false }),
+        "",
+        "",
+      ],
+    });
+  };
+
+  const exportToCSV = () => {
+    const billNoHeader = isCustomer ? "Sales No" : "Purchase No";
+    const slug = isCustomer ? "customer_pending_bills" : "supplier_pending_bills";
+    const headers = [
+      billNoHeader,
+      partyLabel,
+      "Date",
+      "Due Date",
+      "Credit Days",
+      "Bill Total",
+      "Paid",
+      "Outstanding",
+      "Overdue Days",
+      "Status",
+    ];
+    const csvContent = [
+      headers.join(","),
+      ...flatBills.map((bill) =>
+        [
+          `"${bill.bill_no || ""}"`,
+          `"${bill.party_name || ""}"`,
+          bill.date ? format(new Date(bill.date), "yyyy-MM-dd") : "",
+          bill.due_date ? format(new Date(bill.due_date), "yyyy-MM-dd") : "",
+          bill.credit_days || 0,
+          bill.bill_total ?? 0,
+          bill.paid_amount ?? 0,
+          bill.outstanding_amount ?? 0,
+          bill.overdue_days || 0,
+          `"${bill.payment_status || "UNPAID"}"`,
+        ].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `${slug}_${format(new Date(), "yyyy-MM-dd")}.csv`
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -404,6 +561,24 @@ const PendingBillsReport = ({ variant }: PendingBillsReportProps) => {
               Clear filter
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportToPDF}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export as PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportToCSV}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Export as CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="relative w-full max-w-md sm:ml-auto">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
