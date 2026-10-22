@@ -242,11 +242,15 @@ const BillToBillPayment = () => {
 
   const calculateOverflow = () => {
     if (!reconciliationData) return 0;
+    const pool =
+      reconciliationData.available_amount ??
+      reconciliationData.total_payment_amount ??
+      0;
     const totalNewPayments = calculatedStatus.reduce(
       (total, bill) => total + (bill.new_cleared_amount || 0),
       0
     );
-    return Math.max(0, reconciliationData.total_payment_amount - totalNewPayments);
+    return Math.max(0, pool - totalNewPayments);
   };
 
   const getStatusBadge = (status: string, isBillPaid?: boolean) => {
@@ -428,6 +432,18 @@ const BillToBillPayment = () => {
   const poolPayments = reconciliationData
     ? normalizePoolPayments(reconciliationData)
     : [];
+
+  // Pending = party outstanding on open bills; Available = unsettled payment pool.
+  const pendingAmount =
+    reconciliationData?.pending_amount ??
+    calculatedStatus.reduce(
+      (total, bill) => total + (Number(bill.remaining_amount) || 0),
+      0
+    );
+  const availableAmount =
+    reconciliationData?.available_amount ??
+    reconciliationData?.total_payment_amount ??
+    0;
 
   return (
     <DashboardLayout>
