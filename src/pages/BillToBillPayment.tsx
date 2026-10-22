@@ -199,7 +199,8 @@ const BillToBillPayment = () => {
 
   const calculatePaymentStatus = (data: any) => {
     const bills = normalizeBills(data);
-    let remainingAmount = data.total_payment_amount;
+    let remainingAmount =
+      data.available_amount ?? data.total_payment_amount ?? 0;
     const calculatedBills = bills.map((bill) => {
       let newClearedAmount = 0;
       let newStatus = bill.status;
@@ -336,14 +337,16 @@ const BillToBillPayment = () => {
       const amountNeeded = bill.total - bill.cleared_amount;
       const total_amount = amountNeeded;
 
+      const pool =
+        reconciliationData.available_amount ??
+        reconciliationData.total_payment_amount ??
+        0;
+
       if (partyType === "customer") {
         await billPaymentsAPI.processPayments({
           customerId: selectedPartyId,
           total_amount,
-          overflow_amount: Math.max(
-            0,
-            reconciliationData.total_payment_amount - total_amount
-          ),
+          overflow_amount: Math.max(0, pool - total_amount),
           description: `Settlement of bill ${bill.bill_no}`,
           sales: [
             {
@@ -357,10 +360,7 @@ const BillToBillPayment = () => {
         await supplierBillPaymentsAPI.processPayments({
           supplierId: selectedPartyId,
           total_amount,
-          overflow_amount: Math.max(
-            0,
-            reconciliationData.total_payment_amount - total_amount
-          ),
+          overflow_amount: Math.max(0, pool - total_amount),
           description: `Settlement of bill ${bill.bill_no}`,
           purchases: [
             {
@@ -525,11 +525,10 @@ const BillToBillPayment = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold">
-                    {formatCurrency(reconciliationData.total_payment_amount)}
+                    {formatCurrency(pendingAmount)}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Includes {formatCurrency(reconciliationData.bill_overflow_amount)} overflow
-                    from previous reconciliation. Full-bill payments are excluded.
+                    Outstanding balance still owed on open bills
                   </p>
                 </CardContent>
               </Card>
@@ -539,13 +538,16 @@ const BillToBillPayment = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold">
-                    {formatCurrency(reconciliationData.total_payment_amount)}
+                    {formatCurrency(availableAmount)}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Unsettled pool since{" "}
+                    Unsettled payments since{" "}
                     {reconciliationData.last_clear_date
                       ? format(new Date(reconciliationData.last_clear_date), "dd MMM yyyy")
                       : "beginning"}
+                    {reconciliationData.bill_overflow_amount > 0
+                      ? ` (includes ${formatCurrency(reconciliationData.bill_overflow_amount)} overflow)`
+                      : ""}
                   </p>
                 </CardContent>
               </Card>
@@ -646,7 +648,7 @@ const BillToBillPayment = () => {
                       disabled={
                         processingPayment ||
                         !reconciliationData ||
-                        reconciliationData.total_payment_amount <= 0
+                        availableAmount <= 0
                       }
                     >
                       {processingPayment ? (
@@ -659,7 +661,7 @@ const BillToBillPayment = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {reconciliationData.total_payment_amount <= 0 && (
+                  {availableAmount <= 0 && (
                     <Alert className="mb-4">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>

@@ -77,6 +77,13 @@ const categoryLabel = (payment: any) => {
   return category === "VATAV" ? "Watav" : "Normal";
 };
 
+const isVatavPayment = (payment: any) =>
+  (payment.payment_category || "NORMAL").toUpperCase() === "VATAV";
+
+/** Watav vendor (receive party); em dash for Normal / missing. */
+const watavVendorName = (payment: any) =>
+  isVatavPayment(payment) ? payment.receive_customer?.name || "—" : "—";
+
 const PaymentInReport = () => {
   const [paymentsIn, setPaymentsIn] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -181,6 +188,10 @@ const PaymentInReport = () => {
           return payment.type || "";
         case "category":
           return categoryLabel(payment);
+        case "vendor":
+          return isVatavPayment(payment)
+            ? payment.receive_customer?.name || ""
+            : "";
         case "description":
           return payment.description || "";
         case "ref":
@@ -244,6 +255,7 @@ const PaymentInReport = () => {
         { header: "Amount", width: 30, align: "right" },
         { header: "Type", width: 28, align: "center" },
         { header: "Category", width: 24, align: "center" },
+        { header: "Watav Vendor", align: "left" },
         { header: "Description" },
         { header: "Bill / Ref", width: 28, align: "center" },
       ],
@@ -253,6 +265,7 @@ const PaymentInReport = () => {
         formatPdfAmount(payment.received_amount, { prefix: false }),
         payment.type || "—",
         categoryLabel(payment),
+        watavVendorName(payment),
         payment.description || "—",
         payment.sale?.sales_no || "—",
       ]),
@@ -260,6 +273,7 @@ const PaymentInReport = () => {
         "",
         "Total",
         formatPdfAmount(totalReceived, { prefix: false }),
+        "",
         "",
         "",
         "",
@@ -276,6 +290,7 @@ const PaymentInReport = () => {
       "Actual Amount",
       "Type",
       "Category",
+      "Watav Vendor",
       "Description",
       "Bill / Ref",
     ];
@@ -289,6 +304,7 @@ const PaymentInReport = () => {
           payment.actual_amount ?? 0,
           `"${payment.type || ""}"`,
           `"${categoryLabel(payment)}"`,
+          `"${isVatavPayment(payment) ? payment.receive_customer?.name || "" : ""}"`,
           `"${(payment.description || "").replace(/"/g, '""')}"`,
           `"${payment.sale?.sales_no || ""}"`,
         ].join(",")
@@ -502,6 +518,13 @@ const PaymentInReport = () => {
                       className={sortableHeadClass}
                     />
                     <SortableHeader
+                      label="Watav Vendor"
+                      sortKey="vendor"
+                      sort={sort}
+                      onSort={toggleSort}
+                      className={sortableHeadClass}
+                    />
+                    <SortableHeader
                       label="Description"
                       sortKey="description"
                       sort={sort}
@@ -551,6 +574,9 @@ const PaymentInReport = () => {
                               {categoryLabel(payment)}
                             </Badge>
                           </TableCell>
+                          <TableCell>
+                            {watavVendorName(payment)}
+                          </TableCell>
                           <TableCell className="max-w-[220px] truncate">
                             {payment.description || "—"}
                           </TableCell>
@@ -567,12 +593,12 @@ const PaymentInReport = () => {
                         <TableCell className="text-right font-semibold text-emerald-700">
                           {formatAmount(totalReceived)}
                         </TableCell>
-                        <TableCell colSpan={4}></TableCell>
+                        <TableCell colSpan={5}></TableCell>
                       </TableRow>
                     </>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
+                      <TableCell colSpan={8} className="text-center py-8">
                         No payment in data found
                       </TableCell>
                     </TableRow>
